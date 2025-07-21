@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Chat UI Design System - Modern AI Chat Interface */
+
+@layer base {
+  :root {
+    /* Base Colors */
+    --background: 240 10% 98%;
+    --foreground: 240 10% 3.9%;
+
+    /* Chat UI Specific */
+    --sidebar-background: 240 4.8% 95.9%;
+    --sidebar-border: 240 5.9% 90%;
+    --chat-background: 0 0% 100%;
+    --chat-border: 240 5.9% 90%;
+    --message-user: 221 83% 53%;
+    --message-user-foreground: 0 0% 100%;
+    --message-assistant: 240 4.8% 95.9%;
+    --message-assistant-foreground: 240 10% 3.9%;
+
+    /* Enhanced Design Tokens */
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 221 83% 53%;
+    --radius: 0.75rem;
+
+    /* Animations and Effects */
+    --gradient-primary: linear-gradient(135deg, hsl(221 83% 53%), hsl(221 83% 63%));
+    --shadow-elegant: 0 4px 6px -1px hsl(221 83% 53% / 0.1), 0 2px 4px -1px hsl(221 83% 53% / 0.06);
+    --transition-smooth: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .dark {
+    /* Dark Mode Colors */
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+
+    /* Chat UI Dark Mode */
+    --sidebar-background: 240 6% 10%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --chat-background: 240 10% 3.9%;
+    --chat-border: 240 3.7% 15.9%;
+    --message-user: 221 83% 53%;
+    --message-user-foreground: 0 0% 100%;
+    --message-assistant: 240 3.7% 15.9%;
+    --message-assistant-foreground: 0 0% 98%;
+
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 221 83% 53%;
+
+    /* Dark Mode Effects */
+    --shadow-elegant: 0 4px 6px -1px hsl(0 0% 0% / 0.3), 0 2px 4px -1px hsl(0 0% 0% / 0.2);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
