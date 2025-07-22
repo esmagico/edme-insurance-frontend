@@ -4,9 +4,26 @@ import { ChatInterface } from "./ChatInterface";
 import { RightSidebar } from "./RightSidebar";
 import { ThemeToggle } from "./ThemeToggle";
 import axios from "axios";
+export interface Citation {
+  confidence: {
+    score: number;
+  };
+  document_name: string;
+  text_snippet: string;
+}
+
+export interface ResponseData {
+  answer: string;
+  citations: Citation[];
+  confidence: {
+    justification: string;
+    score: number;
+  };
+}
+
 export interface Message {
   query: string;
-  response: string;
+  response: string | ResponseData;
 }
 
 export interface ChatSession {
@@ -35,7 +52,7 @@ export const ChatLayout = () => {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [allSessions, setAllSessions] = useState([]);
 
-  console.log(messages, "messages");
+  console.log(chatSessions, "messages");
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
   const handleStartSession = () => {
@@ -171,7 +188,7 @@ export const ChatLayout = () => {
       </div>
 
       {/* Right Sidebar */}
-      {messages.length > 0 && (
+      {jsonData && (
         <RightSidebar
           isOpen={rightSidebarOpen}
           onToggle={() => setRightSidebarOpen(!rightSidebarOpen)}
