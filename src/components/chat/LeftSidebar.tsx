@@ -19,7 +19,7 @@ export const LeftSidebar = ({
   chatSessions,
   currentChatId,
   onNewChat,
-  onLoadChat
+  onLoadChat,
 }: LeftSidebarProps) => {
   const [width, setWidth] = useState(320);
   const [isResizing, setIsResizing] = useState(false);

@@ -1,28 +1,40 @@
 import { useState, useRef, useEffect } from "react";
-import { FiSend, FiPaperclip, FiMic, FiMicOff } from "react-icons/fi";
+import { FiSend, FiPaperclip, FiMic, FiMicOff, FiLoader } from "react-icons/fi";
 import { Message } from "./ChatLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "./ThemeToggle";
+import { Axis3D } from "lucide-react";
+import axios from "axios";
 
 interface ChatInterfaceProps {
   messages: Message[];
   onSendMessage: (text: string, fileName?: string) => void;
   isDark: boolean;
   setIsDark: (isDark: boolean) => void;
+  sessionId: string | null;
+  setJsonData: (jsonData: any) => void;
 }
+
+// API configuration
+
 
 export const ChatInterface = ({
   messages,
   onSendMessage,
   isDark,
   setIsDark,
+  sessionId,
+  setJsonData
 }: ChatInterfaceProps) => {
   const [inputText, setInputText] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isListening, setIsListening] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isPopulating, setIsPopulating] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const [baseText, setBaseText] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -30,6 +42,8 @@ export const ChatInterface = ({
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const baseTextRef = useRef<string>("");
   const { toast } = useToast();
+
+  const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
   // Initialize speech recognition
   useEffect(() => {
@@ -98,33 +112,144 @@ export const ChatInterface = ({
     }
   }, [messages]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleExtractPolicyData = () => {
+    setIsExtracting(true);
+    axios.post(`${baseUrl}/extractPolicyData`, {
+      session_id: sessionId,
+    })
+    .then((res) => {
+      console.log(res.data);
+      setJsonData(res.data?.structured_data);
+      console.log(res.data, "handleExtractPolicyData")
+    })
+    .catch((err) => {
+      console.log(err);
+    })
+    .finally(() => {
+      setIsExtracting(false);
+    });
+  }
+
+  const handlePopulateSession = () => {
+    setIsPopulating(true);
+    axios.post(`${baseUrl}/populateSession`, {
+      session_id: sessionId,
+    })
+    .then((res) => {
+      console.log(res.data);
+      handleExtractPolicyData();
+      console.log(res.data, "handlePopulateSession")
+    })
+    .catch((err) => {
+      console.log(err);
+    })
+    .finally(() => {
+      setIsPopulating(false);
+    });
+  }
+
+  // API call to upload document
+  const uploadDocument = async (file: File): Promise<boolean> => {
+    if (!sessionId) {
+      toast({
+        title: "Error",
+        description: "Session ID is required for file upload",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    try {
+      setIsUploading(true);
+      console.log(file,"file")
+      const formData = new FormData();
+      formData.append('files', file);
+      formData.append('session_id', sessionId);
+
+      const response = await fetch(`${baseUrl}/uploadDocument`, {
+        method: 'POST',
+        body: formData,
+        // Don't set Content-Type header - let browser set it with boundary for FormData
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      handlePopulateSession();
+      
+      toast({
+        title: "Upload successful",
+        description: `${file.name} has been uploaded successfully`,
+      });
+
+      return true;
+    } catch (error) {
+      console.error('File upload error:', error);
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "Failed to upload file",
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!inputText.trim() && !selectedFile) return;
+    if (!inputText.trim() && selectedFiles.length === 0) return;
 
-    const messageText = inputText.trim() || "File uploaded";
-    const fileName = selectedFile?.name;
+    // If there are files, upload them first
+    if (selectedFiles.length > 0) {
+      const uploadPromises = selectedFiles.map(file => uploadDocument(file));
+      const uploadResults = await Promise.all(uploadPromises);
+      
+      // Check if all uploads were successful
+      const failedUploads = uploadResults.filter(result => !result).length;
+      if (failedUploads > 0) {
+        toast({
+          title: "Some uploads failed",
+          description: `${failedUploads} out of ${selectedFiles.length} files failed to upload`,
+          variant: "destructive",
+        });
+        return; // Don't send message if uploads failed
+      }
+    }
 
-    onSendMessage(messageText, fileName);
+    const messageText = inputText.trim() || "Files uploaded";
+    const fileNames = selectedFiles.map((file) => file.name).join(", ");
+
+    onSendMessage(messageText, fileNames || undefined);
 
     // Reset form
     setInputText("");
-    setSelectedFile(null);
+    setSelectedFiles([]);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setSelectedFiles((prev) => [...prev, ...files]);
       toast({
-        title: "File selected",
-        description: `"${file.name}" is ready to send`,
+        title: `${files.length} file${files.length > 1 ? "s" : ""} selected`,
+        description: `Added: ${files.map((f) => f.name).join(", ")}`,
       });
     }
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    toast({
+      title: "File removed",
+      description: "File has been removed from selection",
+    });
   };
 
   const toggleSpeechRecognition = () => {
@@ -146,11 +271,6 @@ export const ChatInterface = ({
         setBaseText(currentText);
         baseTextRef.current = currentText;
         recognitionRef.current.start();
-        // toast({
-        //   title: "Listening...",
-        //   description:
-        //     "Speak now, your words will be added to the existing text",
-        // });
       } catch (error) {
         console.error("Error starting speech recognition:", error);
         toast({
@@ -167,6 +287,24 @@ export const ChatInterface = ({
       <div className="h-[61px] flex items-center justify-between px-4 border-b border-chat-border bg-chat-bg">
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-semibold">AI Chat Assistant</h1>
+          {isUploading && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <FiLoader className="h-4 w-4 animate-spin" />
+              Uploading...
+            </div>
+          )}
+          {isPopulating && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <FiLoader className="h-4 w-4 animate-spin" />
+              Populating...
+            </div>
+          )}
+          {isExtracting && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <FiLoader className="h-4 w-4 animate-spin" />
+              Extracting...
+            </div>
+          )}
         </div>
         <ThemeToggle isDark={isDark} onToggle={() => setIsDark(!isDark)} />
       </div>
@@ -210,9 +348,6 @@ export const ChatInterface = ({
                       {message.fileName}
                     </div>
                   )}
-                  {/* <div className="text-xs mt-2 opacity-60">
-                    {message.timestamp.toLocaleTimeString()}
-                  </div> */}
                 </div>
               </div>
             ))
@@ -223,6 +358,51 @@ export const ChatInterface = ({
       {/* Input Area */}
       <div className="border-t border-chat-border bg-chat-bg p-4 sticky bottom-0">
         <div className="max-w-4xl mx-auto">
+          {/* Selected Files Display - Above Input */}
+          {selectedFiles.length > 0 && (
+            <div className="mb-3 space-y-2">
+              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                <FiPaperclip className="h-3 w-3" />
+                Selected {selectedFiles.length} file
+                {selectedFiles.length > 1 ? "s" : ""}:
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {selectedFiles.map((file, index) => (
+                  <div
+                    key={`${file.name}-${index}`}
+                    className="flex items-center gap-2 bg-muted px-2 py-1 rounded-md text-xs"
+                  >
+                    <FiPaperclip className="h-3 w-3" />
+                    <span className="max-w-32 truncate">{file.name}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeFile(index)}
+                      className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                      disabled={isUploading || isPopulating || isExtracting}
+                    >
+                      ×
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSelectedFiles([]);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+                className="text-xs h-auto p-1 text-muted-foreground hover:text-foreground"
+                disabled={isUploading || isPopulating || isExtracting}
+              >
+                Clear all files
+              </Button>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="flex gap-2">
             <div className="flex-1 flex gap-2">
               <Input
@@ -230,6 +410,7 @@ export const ChatInterface = ({
                 onChange={(e) => setInputText(e.target.value)}
                 placeholder="How can I help you today?"
                 className="flex-1"
+                disabled={isUploading || isPopulating || isExtracting}
               />
 
               <input
@@ -238,6 +419,8 @@ export const ChatInterface = ({
                 onChange={handleFileSelect}
                 className="hidden"
                 accept="*/*"
+                multiple
+                disabled={isUploading || isPopulating || isExtracting}
               />
 
               <Button
@@ -246,6 +429,7 @@ export const ChatInterface = ({
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
                 className="shrink-0"
+                disabled={isUploading || isPopulating || isExtracting}
               >
                 <FiPaperclip className="h-4 w-4" />
               </Button>
@@ -261,6 +445,7 @@ export const ChatInterface = ({
                       ? "bg-red-500 hover:bg-red-600 text-white animate-pulse"
                       : ""
                   }`}
+                  disabled={isUploading || isPopulating || isExtracting}
                 >
                   {isListening ? (
                     <FiMicOff className="h-4 w-4" />
@@ -273,31 +458,16 @@ export const ChatInterface = ({
 
             <Button
               type="submit"
-              disabled={!inputText.trim() && !selectedFile}
+              disabled={(!inputText.trim() && selectedFiles.length === 0) || isUploading || isPopulating || isExtracting}
               className="shrink-0"
             >
-              <FiSend className="h-4 w-4" />
+              {isUploading || isPopulating || isExtracting ? (
+                <FiLoader className="h-4 w-4 animate-spin" />
+              ) : (
+                <FiSend className="h-4 w-4" />
+              )}
             </Button>
           </form>
-
-          {selectedFile && (
-            <div className="mt-2 text-sm text-muted-foreground flex items-center gap-2">
-              <FiPaperclip className="h-3 w-3" />
-              Selected: {selectedFile.name}
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSelectedFile(null);
-                  if (fileInputRef.current) fileInputRef.current.value = "";
-                }}
-                className="text-xs h-auto p-1"
-              >
-                Remove
-              </Button>
-            </div>
-          )}
         </div>
       </div>
     </div>

@@ -3,7 +3,7 @@ import { LeftSidebar } from "./LeftSidebar";
 import { ChatInterface } from "./ChatInterface";
 import { RightSidebar } from "./RightSidebar";
 import { ThemeToggle } from "./ThemeToggle";
-
+import axios from "axios";
 export interface Message {
   id: string;
   text: string;
@@ -33,11 +33,38 @@ export const ChatLayout = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  const [jsonData,setJsonData] = useState<any>(null);
   const [jsonOutput, setJsonOutput] = useState<any>({
     messages: [],
     currentSession: null,
     timestamp: new Date().toISOString(),
   });
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [allSessions, setAllSessions] = useState([]);
+
+  console.log(sessionId, "sessionId");
+  const baseUrl = import.meta.env.VITE_API_BASE_URL;
+
+  const handleStartSession = () => {
+    axios
+      .post(`${baseUrl}/startSession`, {})
+      .then((res) => {
+        setSessionId(res.data.session_id);
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+  };
+
+  const getAllChats = () => {
+    axios.get(`${baseUrl}/getAllSessions`)
+    .then((res) => {
+      setAllSessions(res.data.session_ids);
+    })
+    .catch((err) => {
+      console.log(err);
+    });
+  }
 
   // Create initial chat session on mount
   useEffect(() => {
@@ -53,6 +80,8 @@ export const ChatLayout = () => {
       setChatSessions([initialSession]);
       setCurrentChatId(initialChatId);
     }
+    getAllChats();
+    handleStartSession();
   }, []); // Empty dependency array means this runs once on mount
 
   // Dark mode effect with localStorage persistence
@@ -121,7 +150,7 @@ export const ChatLayout = () => {
       timestamp: new Date(),
       messages: [],
     };
-
+    handleStartSession();
     setChatSessions((prev) => [newSession, ...prev]);
     setCurrentChatId(newChatId);
     setMessages([]);
@@ -134,6 +163,8 @@ export const ChatLayout = () => {
       setMessages(session.messages);
     }
   };
+
+  console.log(jsonData,"jsonData")
 
   return (
     <div className="h-screen flex bg-background text-foreground overflow-hidden">
@@ -154,6 +185,8 @@ export const ChatLayout = () => {
           onSendMessage={handleSendMessage}
           isDark={isDark}
           setIsDark={setIsDark}
+          sessionId={sessionId}
+          setJsonData={setJsonData}
         />
       </div>
 
@@ -162,7 +195,7 @@ export const ChatLayout = () => {
         <RightSidebar
           isOpen={rightSidebarOpen}
           onToggle={() => setRightSidebarOpen(!rightSidebarOpen)}
-          jsonData={jsonOutput}
+          jsonData={jsonData}
         />
       )}
     </div>
