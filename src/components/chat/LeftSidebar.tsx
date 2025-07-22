@@ -8,7 +8,7 @@ interface LeftSidebarProps {
   isOpen: boolean;
   onToggle: () => void;
   chatSessions: ChatSession[];
-  currentChatId: string | null;
+  currentChatId: string | null; // Keep as currentChatId for prop compatibility
   onNewChat: () => void;
   onLoadChat: (sessionId: string) => void;
 }

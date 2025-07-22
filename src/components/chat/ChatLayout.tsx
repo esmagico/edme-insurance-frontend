@@ -46,7 +46,7 @@ export const ChatLayout = () => {
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+
   const [jsonData, setJsonData] = useState<any>(null);
   const [jsonLoading, setJsonLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -55,15 +55,15 @@ export const ChatLayout = () => {
   console.log(chatSessions, "messages");
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
-  const handleStartSession = () => {
-    axios
-      .post(`${baseUrl}/startSession`, {})
-      .then((res) => {
-        setSessionId(res.data.session_id);
-      })
-      .catch((err) => {
-        console.log(err);
-      });
+  const handleStartSession = async () => {
+    try {
+      const res = await axios.post(`${baseUrl}/startSession`, {});
+      setSessionId(res.data.session_id);
+      return res.data.session_id;
+    } catch (err) {
+      console.log(err);
+      return null;
+    }
   };
 
   const getAllChats = () => {
@@ -77,24 +77,26 @@ export const ChatLayout = () => {
       });
   };
 
-  console.log(allSessions, "allSessions");
+  // console.log(allSessions, "allSessions");
 
   // Create initial chat session on mount
   useEffect(() => {
-    if (chatSessions.length === 0) {
-      const initialChatId = Date.now().toString();
-      const initialSession: ChatSession = {
-        id: initialChatId,
-        title: "New Chat",
-        timestamp: new Date(),
-        messages: [],
-      };
+    const initializeChat = async () => {
+      if (chatSessions.length === 0) {
+        const newSessionId = await handleStartSession();
+        const initialSession: ChatSession = {
+          id: newSessionId || Date.now().toString(),
+          title: "New Chat",
+          timestamp: new Date(),
+          messages: [],
+        };
 
-      setChatSessions([initialSession]);
-      setCurrentChatId(initialChatId);
-    }
-    getAllChats();
-    handleStartSession();
+        setChatSessions([initialSession]);
+      }
+      getAllChats();
+    };
+
+    initializeChat();
   }, []); // Empty dependency array means this runs once on mount
 
   // Dark mode effect with localStorage persistence
@@ -124,10 +126,10 @@ export const ChatLayout = () => {
     setMessages((prev) => [...prev, newMessage]);
 
     // Update current chat session or create new one
-    if (currentChatId) {
+    if (sessionId) {
       setChatSessions((prev) =>
         prev.map((session) =>
-          session.id === currentChatId
+          session.id === sessionId
             ? {
                 ...session,
                 messages: [...session.messages, newMessage],
@@ -138,24 +140,22 @@ export const ChatLayout = () => {
     }
   };
 
-  const startNewChat = () => {
-    const newChatId = Date.now().toString();
+  const startNewChat = async () => {
+    const newSessionId = await handleStartSession(); // Get new sessionId
     const newSession: ChatSession = {
-      id: newChatId,
+      id: newSessionId || Date.now().toString(),
       title: `New Chat`,
       timestamp: new Date(),
       messages: [],
     };
-    handleStartSession();
     setChatSessions((prev) => [newSession, ...prev]);
-    setCurrentChatId(newChatId);
     setMessages([]);
   };
 
-  const loadChatSession = (sessionId: string) => {
-    const session = chatSessions.find((s) => s.id === sessionId);
+  const loadChatSession = (loadSessionId: string) => {
+    const session = chatSessions.find((s) => s.id === loadSessionId);
     if (session) {
-      setCurrentChatId(sessionId);
+      setSessionId(loadSessionId);
       setMessages(session.messages);
     }
   };
@@ -169,7 +169,7 @@ export const ChatLayout = () => {
         isOpen={leftSidebarOpen}
         onToggle={() => setLeftSidebarOpen(!leftSidebarOpen)}
         chatSessions={chatSessions}
-        currentChatId={currentChatId}
+        currentChatId={sessionId}
         onNewChat={startNewChat}
         onLoadChat={loadChatSession}
       />
