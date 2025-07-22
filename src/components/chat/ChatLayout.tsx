@@ -5,11 +5,8 @@ import { RightSidebar } from "./RightSidebar";
 import { ThemeToggle } from "./ThemeToggle";
 import axios from "axios";
 export interface Message {
-  id: string;
-  text: string;
-  fileName?: string;
-  type: "user" | "assistant";
-  timestamp: Date;
+  query: string;
+  response: string;
 }
 
 export interface ChatSession {
@@ -33,16 +30,11 @@ export const ChatLayout = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
-  const [jsonData,setJsonData] = useState<any>(null);
-  const [jsonOutput, setJsonOutput] = useState<any>({
-    messages: [],
-    currentSession: null,
-    timestamp: new Date().toISOString(),
-  });
+  const [jsonData, setJsonData] = useState<any>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [allSessions, setAllSessions] = useState([]);
 
-  console.log(sessionId, "sessionId");
+  console.log(messages, "messages");
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
   const handleStartSession = () => {
@@ -57,14 +49,17 @@ export const ChatLayout = () => {
   };
 
   const getAllChats = () => {
-    axios.get(`${baseUrl}/getAllSessions`)
-    .then((res) => {
-      setAllSessions(res.data.session_ids);
-    })
-    .catch((err) => {
-      console.log(err);
-    });
-  }
+    axios
+      .get(`${baseUrl}/getAllSessions`)
+      .then((res) => {
+        setAllSessions(res.data.data);
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+  };
+
+  console.log(allSessions, "allSessions");
 
   // Create initial chat session on mount
   useEffect(() => {
@@ -96,36 +91,19 @@ export const ChatLayout = () => {
     localStorage.setItem("darkMode", JSON.stringify(isDark));
   }, [isDark]);
 
-  // Update JSON output when messages change
-  useEffect(() => {
-    setJsonOutput({
-      messages: messages,
-      currentSession: currentChatId,
-      timestamp: new Date().toISOString(),
-      totalMessages: messages.length,
-      chatSessions: chatSessions.length,
-    });
-  }, [messages, currentChatId, chatSessions]);
-
-  const handleSendMessage = (text: string, fileName?: string) => {
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      text,
-      fileName,
-      type: "user",
-      timestamp: new Date(),
-    };
-
-    const assistantMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      text: `I received your message: "${text}"${
+  const handleSendMessage = (
+    text: string,
+    fileName?: string,
+    message?: Message
+  ) => {
+    const newMessage: Message = message || {
+      query: text,
+      response: `I received your message: "${text}"${
         fileName ? ` and file: ${fileName}` : ""
       }. This is a demo response.`,
-      type: "assistant",
-      timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, newMessage, assistantMessage]);
+    setMessages((prev) => [...prev, newMessage]);
 
     // Update current chat session or create new one
     if (currentChatId) {
@@ -134,7 +112,7 @@ export const ChatLayout = () => {
           session.id === currentChatId
             ? {
                 ...session,
-                messages: [...session.messages, newMessage, assistantMessage],
+                messages: [...session.messages, newMessage],
               }
             : session
         )
@@ -164,7 +142,7 @@ export const ChatLayout = () => {
     }
   };
 
-  console.log(jsonData,"jsonData")
+  console.log(jsonData, "jsonData");
 
   return (
     <div className="h-screen flex bg-background text-foreground overflow-hidden">

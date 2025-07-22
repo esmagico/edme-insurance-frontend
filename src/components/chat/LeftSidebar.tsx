@@ -129,7 +129,7 @@ export const LeftSidebar = ({
                     )}
                     <div className="truncate pl-2">
                       <div className="text-base font-medium truncate text-foreground/90">
-                        {session?.messages[0]?.text || "New conversation"}
+                        {session?.messages[0]?.query || "New conversation"}
                       </div>
                       <div className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
                         {/* <span>{new Date(session.timestamp).toLocaleDateString(undefined, { 

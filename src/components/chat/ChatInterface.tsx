@@ -11,7 +11,7 @@ import axios from "axios";
 
 interface ChatInterfaceProps {
   messages: Message[];
-  onSendMessage: (text: string, fileName?: string) => void;
+  onSendMessage: (text: string, fileName?: string, message?: Message) => void;
   isDark: boolean;
   setIsDark: (isDark: boolean) => void;
   sessionId: string | null;
@@ -35,6 +35,7 @@ export const ChatInterface = ({
   const [isUploading, setIsUploading] = useState(false);
   const [isPopulating, setIsPopulating] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [isAnswering, setIsAnswering] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const [baseText, setBaseText] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -148,6 +149,45 @@ export const ChatInterface = ({
     });
   }
 
+  const handleQuestionAnswer = async (question: string) => {
+    setIsAnswering(true);
+    try {
+      const response = await axios.post(`${baseUrl}/fetchResponse`, {
+        // session_id: sessionId,
+        session_id: "e5af0054-ba5a-459a-8ab7-05862b88e797",
+        text: question,
+      });
+      const answer = response.data?.response?.answer
+      
+      // Create message with query and response
+      const newMessage = {
+        query: question,
+        response: answer || "No response received"
+      };
+      
+      // Add message using the onSendMessage callback
+      onSendMessage(question, undefined, newMessage);
+      
+      return response.data;
+    } catch (err) {
+      console.log(err);
+      toast({
+        title: "Error",
+        description: "Failed to get response from AI",
+        variant: "destructive",
+      });
+      
+      // Add error message
+      const errorMessage = {
+        query: question,
+        response: "Hello Answer Nhi Milega"
+      };
+      onSendMessage(question, undefined, errorMessage);
+    } finally {
+      setIsAnswering(false);
+    }
+  }
+
   // API call to upload document
   const uploadDocument = async (file: File): Promise<boolean> => {
     if (!sessionId) {
@@ -223,7 +263,10 @@ export const ChatInterface = ({
     const messageText = inputText.trim() || "Files uploaded";
     const fileNames = selectedFiles.map((file) => file.name).join(", ");
 
-    onSendMessage(messageText, fileNames || undefined);
+    // If there's text input, send it as a question
+    if (inputText.trim() !== "") {
+      await handleQuestionAnswer(inputText.trim());
+    }
 
     // Reset form
     setInputText("");
@@ -305,6 +348,12 @@ export const ChatInterface = ({
               Extracting...
             </div>
           )}
+          {isAnswering && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <FiLoader className="h-4 w-4 animate-spin" />
+              Thinking...
+            </div>
+          )}
         </div>
         <ThemeToggle isDark={isDark} onToggle={() => setIsDark(!isDark)} />
       </div>
@@ -327,27 +376,20 @@ export const ChatInterface = ({
               </p>
             </div>
           ) : (
-            messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${
-                  message.type === "user" ? "justify-end" : "justify-start"
-                }`}
-              >
-                <div
-                  className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg animate-fade-in ${
-                    message.type === "user"
-                      ? "bg-message-user text-message-user-fg"
-                      : "bg-message-assistant text-message-assistant-fg border border-border"
-                  }`}
-                >
-                  <div className="text-sm">{message.text}</div>
-                  {message.fileName && (
-                    <div className="text-xs mt-2 opacity-80 flex items-center gap-1">
-                      <FiPaperclip className="h-3 w-3" />
-                      {message.fileName}
-                    </div>
-                  )}
+            messages.map((message, index) => (
+              <div key={index} className="space-y-4">
+                {/* User Query */}
+                <div className="flex justify-end">
+                  <div className="max-w-xs lg:max-w-md px-4 py-3 rounded-lg animate-fade-in bg-message-user text-message-user-fg">
+                    <div className="text-sm">{message.query}</div>
+                  </div>
+                </div>
+                
+                {/* Assistant Response */}
+                <div className="flex justify-start">
+                  <div className="max-w-xs lg:max-w-md px-4 py-3 rounded-lg animate-fade-in bg-message-assistant text-message-assistant-fg border border-border">
+                    <div className="text-sm">{message.response}</div>
+                  </div>
                 </div>
               </div>
             ))
@@ -380,7 +422,7 @@ export const ChatInterface = ({
                       size="sm"
                       onClick={() => removeFile(index)}
                       className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground"
-                      disabled={isUploading || isPopulating || isExtracting}
+                      disabled={isUploading || isPopulating || isExtracting || isAnswering}
                     >
                       ×
                     </Button>
@@ -396,7 +438,7 @@ export const ChatInterface = ({
                   if (fileInputRef.current) fileInputRef.current.value = "";
                 }}
                 className="text-xs h-auto p-1 text-muted-foreground hover:text-foreground"
-                disabled={isUploading || isPopulating || isExtracting}
+                disabled={isUploading || isPopulating || isExtracting || isAnswering}
               >
                 Clear all files
               </Button>
@@ -410,7 +452,7 @@ export const ChatInterface = ({
                 onChange={(e) => setInputText(e.target.value)}
                 placeholder="How can I help you today?"
                 className="flex-1"
-                disabled={isUploading || isPopulating || isExtracting}
+                disabled={isUploading || isPopulating || isExtracting || isAnswering}
               />
 
               <input
@@ -429,7 +471,7 @@ export const ChatInterface = ({
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
                 className="shrink-0"
-                disabled={isUploading || isPopulating || isExtracting}
+                disabled={isUploading || isPopulating || isExtracting || isAnswering}
               >
                 <FiPaperclip className="h-4 w-4" />
               </Button>
@@ -445,7 +487,7 @@ export const ChatInterface = ({
                       ? "bg-red-500 hover:bg-red-600 text-white animate-pulse"
                       : ""
                   }`}
-                  disabled={isUploading || isPopulating || isExtracting}
+                  disabled={isUploading || isPopulating || isExtracting || isAnswering}
                 >
                   {isListening ? (
                     <FiMicOff className="h-4 w-4" />
@@ -458,10 +500,10 @@ export const ChatInterface = ({
 
             <Button
               type="submit"
-              disabled={(!inputText.trim() && selectedFiles.length === 0) || isUploading || isPopulating || isExtracting}
+              disabled={(!inputText.trim() && selectedFiles.length === 0) || isUploading || isPopulating || isExtracting || isAnswering}
               className="shrink-0"
             >
-              {isUploading || isPopulating || isExtracting ? (
+              {isUploading || isPopulating || isExtracting || isAnswering ? (
                 <FiLoader className="h-4 w-4 animate-spin" />
               ) : (
                 <FiSend className="h-4 w-4" />
