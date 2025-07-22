@@ -31,6 +31,7 @@ export const ChatLayout = () => {
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [jsonData, setJsonData] = useState<any>(null);
+  const [jsonLoading, setJsonLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [allSessions, setAllSessions] = useState([]);
 
@@ -165,6 +166,7 @@ export const ChatLayout = () => {
           setIsDark={setIsDark}
           sessionId={sessionId}
           setJsonData={setJsonData}
+          setJsonLoading={setJsonLoading}
         />
       </div>
 
@@ -174,6 +176,7 @@ export const ChatLayout = () => {
           isOpen={rightSidebarOpen}
           onToggle={() => setRightSidebarOpen(!rightSidebarOpen)}
           jsonData={jsonData}
+          loading={jsonLoading}
         />
       )}
     </div>

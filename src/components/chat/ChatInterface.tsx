@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "./ThemeToggle";
-import { Axis3D } from "lucide-react";
 import axios from "axios";
 
 interface ChatInterfaceProps {
@@ -16,6 +15,7 @@ interface ChatInterfaceProps {
   setIsDark: (isDark: boolean) => void;
   sessionId: string | null;
   setJsonData: (jsonData: any) => void;
+  setJsonLoading: (loading: boolean) => void;
 }
 
 // API configuration
@@ -27,7 +27,8 @@ export const ChatInterface = ({
   isDark,
   setIsDark,
   sessionId,
-  setJsonData
+  setJsonData,
+  setJsonLoading
 }: ChatInterfaceProps) => {
   const [inputText, setInputText] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -128,6 +129,7 @@ export const ChatInterface = ({
     })
     .finally(() => {
       setIsExtracting(false);
+      setJsonLoading(false);
     });
   }
 
@@ -151,10 +153,10 @@ export const ChatInterface = ({
 
   const handleQuestionAnswer = async (question: string) => {
     setIsAnswering(true);
+    setJsonLoading(true);
     try {
       const response = await axios.post(`${baseUrl}/fetchResponse`, {
-        // session_id: sessionId,
-        session_id: "e5af0054-ba5a-459a-8ab7-05862b88e797",
+        session_id: sessionId,
         text: question,
       });
       const answer = response.data?.response?.answer
@@ -218,11 +220,6 @@ export const ChatInterface = ({
 
       const result = await response.json();
       handlePopulateSession();
-      
-      toast({
-        title: "Upload successful",
-        description: `${file.name} has been uploaded successfully`,
-      });
 
       return true;
     } catch (error) {
@@ -280,19 +277,11 @@ export const ChatInterface = ({
     const files = Array.from(e.target.files || []);
     if (files.length > 0) {
       setSelectedFiles((prev) => [...prev, ...files]);
-      toast({
-        title: `${files.length} file${files.length > 1 ? "s" : ""} selected`,
-        description: `Added: ${files.map((f) => f.name).join(", ")}`,
-      });
     }
   };
 
   const removeFile = (index: number) => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
-    toast({
-      title: "File removed",
-      description: "File has been removed from selection",
-    });
   };
 
   const toggleSpeechRecognition = () => {
@@ -348,7 +337,7 @@ export const ChatInterface = ({
               Extracting...
             </div>
           )}
-          {isAnswering && (
+          {isAnswering && !isUploading && !isPopulating && !isExtracting && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <FiLoader className="h-4 w-4 animate-spin" />
               Thinking...
@@ -398,23 +387,23 @@ export const ChatInterface = ({
       </div>
 
       {/* Input Area */}
-      <div className="border-t border-chat-border bg-chat-bg p-4 sticky bottom-0">
+      <div className="border-t border-chat-border bg-chat-bg px-4 py-4 sticky bottom-0">
         <div className="max-w-4xl mx-auto">
           {/* Selected Files Display - Above Input */}
           {selectedFiles.length > 0 && (
-            <div className="mb-3 space-y-2">
-              <div className="text-sm text-muted-foreground flex items-center gap-2">
-                <FiPaperclip className="h-3 w-3" />
+            <div className="flex items-center gap-2 mb-2">
+              {/* <div className="text-sm text-muted-foreground flex items-center gap-2">
+                <FiPaperclip className="h-4 w-4" />
                 Selected {selectedFiles.length} file
                 {selectedFiles.length > 1 ? "s" : ""}:
-              </div>
-              <div className="flex flex-wrap gap-2">
+              </div> */}
+              <div className="flex gap-2 items-center">
                 {selectedFiles.map((file, index) => (
                   <div
                     key={`${file.name}-${index}`}
                     className="flex items-center gap-2 bg-muted px-2 py-1 rounded-md text-xs"
                   >
-                    <FiPaperclip className="h-3 w-3" />
+                    <FiPaperclip className="h-4 w-4" />
                     <span className="max-w-32 truncate">{file.name}</span>
                     <Button
                       type="button"

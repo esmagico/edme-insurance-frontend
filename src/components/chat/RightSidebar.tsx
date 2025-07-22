@@ -8,12 +8,14 @@ interface RightSidebarProps {
   isOpen: boolean;
   onToggle: () => void;
   jsonData: any;
+  loading: boolean;
 }
 
 export const RightSidebar = ({
   isOpen,
   onToggle,
   jsonData,
+  loading,
 }: RightSidebarProps) => {
   const { toast } = useToast();
   const [width, setWidth] = useState(320);
@@ -121,17 +123,44 @@ export const RightSidebar = ({
               variant="outline"
               size="sm"
               className="w-full gap-2"
+              disabled={loading || !jsonData}
             >
               <FiCopy className="h-4 w-4" />
-              Copy JSON
+              {loading ? "Loading..." : "Copy JSON"}
             </Button>
           </div>
 
           {/* JSON Display */}
           <div className="flex-1 p-3 overflow-y-auto scroll-smooth">
-            <pre className="h-[calc(100vh-200px)] text-xs bg-muted rounded-lg p-3 overflow-x-auto whitespace-pre-wrap min-h-0">
-              <code>{JSON.stringify(jsonData, null, 2)}</code>
-            </pre>
+            {loading ? (
+              <div className="h-[calc(100vh-200px)] bg-muted rounded-lg p-3 flex flex-col justify-center items-center">
+                <div className="space-y-4 w-full">
+                  {/* Loading Animation */}
+                  <div className="flex items-center justify-center gap-2 mb-6">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                    <span className="text-sm text-muted-foreground">
+                      Loading JSON...
+                    </span>
+                  </div>
+
+                  {/* Skeleton Lines */}
+                  <div className="space-y-3">
+                    <div className="h-3 bg-muted-foreground/20 rounded animate-pulse"></div>
+                    <div className="h-3 bg-muted-foreground/20 rounded animate-pulse w-3/4"></div>
+                    <div className="h-3 bg-muted-foreground/20 rounded animate-pulse w-1/2"></div>
+                    <div className="h-3 bg-muted-foreground/20 rounded animate-pulse w-5/6"></div>
+                    <div className="h-3 bg-muted-foreground/20 rounded animate-pulse w-2/3"></div>
+                    <div className="h-3 bg-muted-foreground/20 rounded animate-pulse"></div>
+                    <div className="h-3 bg-muted-foreground/20 rounded animate-pulse w-4/5"></div>
+                    <div className="h-3 bg-muted-foreground/20 rounded animate-pulse w-1/3"></div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <pre className="h-[calc(100vh-200px)] text-xs bg-muted rounded-lg p-3 overflow-x-auto whitespace-pre-wrap min-h-0">
+                <code>{JSON.stringify(jsonData, null, 2)}</code>
+              </pre>
+            )}
           </div>
         </div>
       ) : (
