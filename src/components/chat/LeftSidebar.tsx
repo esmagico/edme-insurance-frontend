@@ -2,6 +2,7 @@ import { FiPlus, FiMessageSquare, FiChevronLeft, FiChevronRight } from 'react-ic
 import { ChatSession } from './ChatLayout';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 interface LeftSidebarProps {
   isOpen: boolean;
@@ -20,12 +21,58 @@ export const LeftSidebar = ({
   onNewChat,
   onLoadChat
 }: LeftSidebarProps) => {
+  const [width, setWidth] = useState(320);
+  const [isResizing, setIsResizing] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
   const recentChats = chatSessions.slice(0, 10);
 
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isResizing) return;
+    
+    const newWidth = e.clientX;
+    if (newWidth >= 200 && newWidth <= 500) {
+      setWidth(newWidth);
+    }
+  }, [isResizing]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    } else {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing, handleMouseMove, handleMouseUp]);
+
   return (
-    <div className={`transition-all duration-300 ease-in-out border-r border-sidebar-border bg-sidebar-bg flex flex-col ${
-      isOpen ? 'w-80' : 'w-16'
-    }`}>
+    <div 
+      ref={sidebarRef}
+      className={`relative border-r border-sidebar-border bg-sidebar-bg flex flex-col ${
+        isOpen ? '' : 'w-16'
+      } ${!isOpen ? 'transition-all duration-300 ease-in-out' : ''}`}
+      style={isOpen ? { width: `${width}px` } : undefined}
+    >
       {/* Top Section with Toggle and New Chat */}
       <div className="flex flex-col gap-2 p-4 border-b border-sidebar-border bg-background/50">
         <Button
@@ -85,13 +132,13 @@ export const LeftSidebar = ({
                         {session?.messages[0]?.text || "New conversation"}
                       </div>
                       <div className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
-                        <span>{new Date(session.timestamp).toLocaleDateString(undefined, { 
+                        {/* <span>{new Date(session.timestamp).toLocaleDateString(undefined, { 
                           month: 'short', 
                           day: 'numeric',
                           hour: '2-digit',
                           minute: '2-digit'
-                        })}</span>
-                        <span className="text-xs">•</span>
+                        })}</span> */}
+                        {/* <span className="text-xs">•</span> */}
                         <span>{session.messages.length} messages</span>
                       </div>
                     </div>
@@ -107,6 +154,16 @@ export const LeftSidebar = ({
       {!isOpen && (
         <div className="flex flex-col items-center gap-4 pt-4">
           <FiMessageSquare className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
+        </div>
+      )}
+
+      {/* Resize Handle */}
+      {isOpen && (
+        <div
+          className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors group"
+          onMouseDown={handleMouseDown}
+        >
+          <div className="w-full h-full group-hover:bg-primary/40" />
         </div>
       )}
     </div>

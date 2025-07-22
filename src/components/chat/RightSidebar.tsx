@@ -1,7 +1,8 @@
-import { FiCode, FiCopy, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { useToast } from '@/hooks/use-toast';
+import { FiCode, FiCopy, FiChevronLeft, FiChevronRight } from "react-icons/fi";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useToast } from "@/hooks/use-toast";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 interface RightSidebarProps {
   isOpen: boolean;
@@ -9,8 +10,57 @@ interface RightSidebarProps {
   jsonData: any;
 }
 
-export const RightSidebar = ({ isOpen, onToggle, jsonData }: RightSidebarProps) => {
+export const RightSidebar = ({
+  isOpen,
+  onToggle,
+  jsonData,
+}: RightSidebarProps) => {
   const { toast } = useToast();
+  const [width, setWidth] = useState(320);
+  const [isResizing, setIsResizing] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isResizing) return;
+
+      const newWidth = window.innerWidth - e.clientX;
+      if (newWidth >= 200 && newWidth <= 500) {
+        setWidth(newWidth);
+      }
+    },
+    [isResizing]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    } else {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizing, handleMouseMove, handleMouseUp]);
 
   const handleCopyJson = async () => {
     try {
@@ -30,9 +80,13 @@ export const RightSidebar = ({ isOpen, onToggle, jsonData }: RightSidebarProps) 
   };
 
   return (
-    <div className={`transition-all duration-300 ease-in-out border-l border-sidebar-border bg-sidebar-bg ${
-      isOpen ? 'w-80' : 'w-16'
-    }`}>
+    <div
+      ref={sidebarRef}
+      className={`relative border-l border-sidebar-border bg-sidebar-bg ${
+        isOpen ? "" : "w-16"
+      } ${!isOpen ? "transition-all duration-300 ease-in-out" : ""}`}
+      style={isOpen ? { width: `${width}px` } : undefined}
+    >
       {/* Header */}
       <div className="p-3 border-b border-sidebar-border">
         <div className="flex items-center justify-between">
@@ -48,7 +102,11 @@ export const RightSidebar = ({ isOpen, onToggle, jsonData }: RightSidebarProps) 
             onClick={onToggle}
             className="p-2 hover:bg-muted"
           >
-            {isOpen ? <FiChevronRight className="h-4 w-4" /> : <FiChevronLeft className="h-4 w-4" />}
+            {isOpen ? (
+              <FiChevronRight className="h-4 w-4" />
+            ) : (
+              <FiChevronLeft className="h-4 w-4" />
+            )}
           </Button>
         </div>
       </div>
@@ -70,15 +128,25 @@ export const RightSidebar = ({ isOpen, onToggle, jsonData }: RightSidebarProps) 
           </div>
 
           {/* JSON Display */}
-          <ScrollArea className="flex-1 p-3">
-            <pre className="text-xs bg-muted rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
+          <div className="flex-1 p-3 overflow-y-auto scroll-smooth">
+            <pre className="h-[calc(100vh-200px)] text-xs bg-muted rounded-lg p-3 overflow-x-auto whitespace-pre-wrap min-h-0">
               <code>{JSON.stringify(jsonData, null, 2)}</code>
             </pre>
-          </ScrollArea>
+          </div>
         </div>
       ) : (
         <div className="flex flex-col items-center gap-4 pt-4">
           <FiCode className="h-5 w-5 text-muted-foreground" />
+        </div>
+      )}
+
+      {/* Resize Handle */}
+      {isOpen && (
+        <div
+          className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors group"
+          onMouseDown={handleMouseDown}
+        >
+          <div className="w-full h-full group-hover:bg-primary/40" />
         </div>
       )}
     </div>

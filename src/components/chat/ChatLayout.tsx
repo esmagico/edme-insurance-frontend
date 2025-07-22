@@ -20,7 +20,14 @@ export interface ChatSession {
 }
 
 export const ChatLayout = () => {
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    // Initialize from localStorage or default to false
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("darkMode");
+      return saved ? JSON.parse(saved) : false;
+    }
+    return false;
+  });
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -38,23 +45,26 @@ export const ChatLayout = () => {
       const initialChatId = Date.now().toString();
       const initialSession: ChatSession = {
         id: initialChatId,
-        title: 'New Chat',
+        title: "New Chat",
         timestamp: new Date(),
-        messages: []
+        messages: [],
       };
-      
+
       setChatSessions([initialSession]);
       setCurrentChatId(initialChatId);
     }
   }, []); // Empty dependency array means this runs once on mount
 
-  // Dark mode effect
+  // Dark mode effect with localStorage persistence
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
     }
+
+    // Save to localStorage
+    localStorage.setItem("darkMode", JSON.stringify(isDark));
   }, [isDark]);
 
   // Update JSON output when messages change
@@ -139,7 +149,12 @@ export const ChatLayout = () => {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        <ChatInterface messages={messages} onSendMessage={handleSendMessage} isDark={isDark} setIsDark={setIsDark} />
+        <ChatInterface
+          messages={messages}
+          onSendMessage={handleSendMessage}
+          isDark={isDark}
+          setIsDark={setIsDark}
+        />
       </div>
 
       {/* Right Sidebar */}

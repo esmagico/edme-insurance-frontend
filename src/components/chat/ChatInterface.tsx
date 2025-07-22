@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
-import { FiSend, FiPaperclip } from 'react-icons/fi';
-import { Message } from './ChatLayout';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { useToast } from '@/hooks/use-toast';
-import { ThemeToggle } from './ThemeToggle';
+import { useState, useRef, useEffect } from "react";
+import { FiSend, FiPaperclip, FiMic, FiMicOff } from "react-icons/fi";
+import { Message } from "./ChatLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useToast } from "@/hooks/use-toast";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface ChatInterfaceProps {
   messages: Message[];
@@ -14,12 +14,81 @@ interface ChatInterfaceProps {
   setIsDark: (isDark: boolean) => void;
 }
 
-export const ChatInterface = ({ messages, onSendMessage, isDark, setIsDark }: ChatInterfaceProps) => {
-  const [inputText, setInputText] = useState('');
+export const ChatInterface = ({
+  messages,
+  onSendMessage,
+  isDark,
+  setIsDark,
+}: ChatInterfaceProps) => {
+  const [inputText, setInputText] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const [baseText, setBaseText] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messageContainerRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const baseTextRef = useRef<string>("");
   const { toast } = useToast();
+
+  // Initialize speech recognition
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        setSpeechSupported(true);
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = "en-US";
+
+        recognition.onstart = () => {
+          setIsListening(true);
+        };
+
+        recognition.onresult = (event) => {
+          const transcript = Array.from(event.results)
+            .map((result) => result[0])
+            .map((result) => result.transcript)
+            .join("");
+
+          // Use a ref to get the current baseText value
+          setInputText((currentInput) => {
+            const currentBaseText = baseTextRef.current;
+            return (
+              currentBaseText +
+              (currentBaseText && transcript ? " " : "") +
+              transcript
+            );
+          });
+        };
+
+        recognition.onerror = (event) => {
+          console.error("Speech recognition error:", event.error);
+          setIsListening(false);
+          toast({
+            title: "Speech recognition error",
+            description:
+              "Please try again or check your microphone permissions",
+            variant: "destructive",
+          });
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current = recognition;
+      }
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, [toast]);
 
   // Auto-scroll to bottom whenever messages change
   useEffect(() => {
@@ -31,19 +100,19 @@ export const ChatInterface = ({ messages, onSendMessage, isDark, setIsDark }: Ch
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!inputText.trim() && !selectedFile) return;
 
-    const messageText = inputText.trim() || 'File uploaded';
+    const messageText = inputText.trim() || "File uploaded";
     const fileName = selectedFile?.name;
 
     onSendMessage(messageText, fileName);
-    
+
     // Reset form
-    setInputText('');
+    setInputText("");
     setSelectedFile(null);
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = "";
     }
   };
 
@@ -58,6 +127,41 @@ export const ChatInterface = ({ messages, onSendMessage, isDark, setIsDark }: Ch
     }
   };
 
+  const toggleSpeechRecognition = () => {
+    if (!speechSupported || !recognitionRef.current) {
+      toast({
+        title: "Speech recognition not supported",
+        description: "Your browser doesn't support speech recognition",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+    } else {
+      try {
+        // Store current input text as base text when starting speech recognition
+        const currentText = inputText;
+        setBaseText(currentText);
+        baseTextRef.current = currentText;
+        recognitionRef.current.start();
+        // toast({
+        //   title: "Listening...",
+        //   description:
+        //     "Speak now, your words will be added to the existing text",
+        // });
+      } catch (error) {
+        console.error("Error starting speech recognition:", error);
+        toast({
+          title: "Could not start listening",
+          description: "Please check your microphone permissions",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col h-full relative bg-chat-bg">
       <div className="h-[61px] flex items-center justify-between px-4 border-b border-chat-border bg-chat-bg">
@@ -68,16 +172,18 @@ export const ChatInterface = ({ messages, onSendMessage, isDark, setIsDark }: Ch
       </div>
 
       {/* Messages Area with Auto-scroll */}
-      <div 
+      <div
         ref={messageContainerRef}
         className="flex-1 p-4 overflow-y-auto scroll-smooth"
-        style={{ scrollBehavior: 'smooth' }}
+        style={{ scrollBehavior: "smooth" }}
       >
         <div className="max-w-4xl mx-auto space-y-4">
           {messages.length === 0 ? (
             <div className="text-center py-12">
               <div className="text-4xl mb-4">💬</div>
-              <h3 className="text-lg font-semibold mb-2">Start a conversation</h3>
+              <h3 className="text-lg font-semibold mb-2">
+                Start a conversation
+              </h3>
               <p className="text-muted-foreground">
                 Send a message to begin chatting with the AI assistant
               </p>
@@ -86,13 +192,15 @@ export const ChatInterface = ({ messages, onSendMessage, isDark, setIsDark }: Ch
             messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${
+                  message.type === "user" ? "justify-end" : "justify-start"
+                }`}
               >
                 <div
                   className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg animate-fade-in ${
-                    message.type === 'user'
-                      ? 'bg-message-user text-message-user-fg'
-                      : 'bg-message-assistant text-message-assistant-fg border border-border'
+                    message.type === "user"
+                      ? "bg-message-user text-message-user-fg"
+                      : "bg-message-assistant text-message-assistant-fg border border-border"
                   }`}
                 >
                   <div className="text-sm">{message.text}</div>
@@ -102,9 +210,9 @@ export const ChatInterface = ({ messages, onSendMessage, isDark, setIsDark }: Ch
                       {message.fileName}
                     </div>
                   )}
-                  <div className="text-xs mt-2 opacity-60">
+                  {/* <div className="text-xs mt-2 opacity-60">
                     {message.timestamp.toLocaleTimeString()}
-                  </div>
+                  </div> */}
                 </div>
               </div>
             ))
@@ -123,7 +231,7 @@ export const ChatInterface = ({ messages, onSendMessage, isDark, setIsDark }: Ch
                 placeholder="How can I help you today?"
                 className="flex-1"
               />
-              
+
               <input
                 ref={fileInputRef}
                 type="file"
@@ -131,7 +239,7 @@ export const ChatInterface = ({ messages, onSendMessage, isDark, setIsDark }: Ch
                 className="hidden"
                 accept="*/*"
               />
-              
+
               <Button
                 type="button"
                 variant="outline"
@@ -141,17 +249,37 @@ export const ChatInterface = ({ messages, onSendMessage, isDark, setIsDark }: Ch
               >
                 <FiPaperclip className="h-4 w-4" />
               </Button>
+
+              {speechSupported && (
+                <Button
+                  type="button"
+                  variant={isListening ? "default" : "outline"}
+                  size="icon"
+                  onClick={toggleSpeechRecognition}
+                  className={`shrink-0 ${
+                    isListening
+                      ? "bg-red-500 hover:bg-red-600 text-white animate-pulse"
+                      : ""
+                  }`}
+                >
+                  {isListening ? (
+                    <FiMicOff className="h-4 w-4" />
+                  ) : (
+                    <FiMic className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
             </div>
-            
-            <Button 
-              type="submit" 
+
+            <Button
+              type="submit"
               disabled={!inputText.trim() && !selectedFile}
               className="shrink-0"
             >
               <FiSend className="h-4 w-4" />
             </Button>
           </form>
-          
+
           {selectedFile && (
             <div className="mt-2 text-sm text-muted-foreground flex items-center gap-2">
               <FiPaperclip className="h-3 w-3" />
@@ -162,7 +290,7 @@ export const ChatInterface = ({ messages, onSendMessage, isDark, setIsDark }: Ch
                 size="sm"
                 onClick={() => {
                   setSelectedFile(null);
-                  if (fileInputRef.current) fileInputRef.current.value = '';
+                  if (fileInputRef.current) fileInputRef.current.value = "";
                 }}
                 className="text-xs h-auto p-1"
               >
