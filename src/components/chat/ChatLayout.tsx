@@ -24,6 +24,15 @@ export interface ResponseData {
 export interface Message {
   query: string;
   response: string | ResponseData;
+  attachedFile?: UploadedFile;
+}
+
+export interface UploadedFile {
+  name: string;
+  size: number;
+  type: string;
+  uploadedAt: Date;
+  content?: string; // Store file content for viewing
 }
 
 export interface ChatSession {
@@ -31,6 +40,8 @@ export interface ChatSession {
   title: string;
   timestamp: Date;
   messages: Message[];
+  jsonData?: any;
+  uploadedFiles?: UploadedFile[];
 }
 
 export const ChatLayout = () => {
@@ -46,13 +57,11 @@ export const ChatLayout = () => {
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-
   const [jsonData, setJsonData] = useState<any>(null);
   const [jsonLoading, setJsonLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [allSessions, setAllSessions] = useState([]);
 
-  console.log(chatSessions, "messages");
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
   const handleStartSession = async () => {
@@ -89,6 +98,8 @@ export const ChatLayout = () => {
           title: "New Chat",
           timestamp: new Date(),
           messages: [],
+          jsonData: null,
+          uploadedFiles: [],
         };
 
         setChatSessions([initialSession]);
@@ -140,6 +151,40 @@ export const ChatLayout = () => {
     }
   };
 
+  const handleUpdateSessionJsonData = (newJsonData: any) => {
+    setJsonData(newJsonData);
+
+    // Update current chat session's jsonData
+    if (sessionId) {
+      setChatSessions((prev) =>
+        prev.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                jsonData: newJsonData,
+              }
+            : session
+        )
+      );
+    }
+  };
+
+  const handleUpdateSessionFiles = (newFiles: UploadedFile[]) => {
+    // Update current chat session's uploaded files
+    if (sessionId) {
+      setChatSessions((prev) =>
+        prev.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                uploadedFiles: newFiles,
+              }
+            : session
+        )
+      );
+    }
+  };
+
   const startNewChat = async () => {
     const newSessionId = await handleStartSession(); // Get new sessionId
     const newSession: ChatSession = {
@@ -147,9 +192,12 @@ export const ChatLayout = () => {
       title: `New Chat`,
       timestamp: new Date(),
       messages: [],
+      jsonData: null,
+      uploadedFiles: [],
     };
     setChatSessions((prev) => [newSession, ...prev]);
     setMessages([]);
+    setJsonData(null); // Clear current jsonData for new session
   };
 
   const loadChatSession = (loadSessionId: string) => {
@@ -157,10 +205,11 @@ export const ChatLayout = () => {
     if (session) {
       setSessionId(loadSessionId);
       setMessages(session.messages);
+      setJsonData(session.jsonData || null); // Load session's jsonData
     }
   };
 
-  console.log(jsonData, "jsonData");
+  console.log(chatSessions, "chatSessions");
 
   return (
     <div className="h-screen flex bg-background text-foreground overflow-hidden">
@@ -182,8 +231,13 @@ export const ChatLayout = () => {
           isDark={isDark}
           setIsDark={setIsDark}
           sessionId={sessionId}
-          setJsonData={setJsonData}
+          setJsonData={handleUpdateSessionJsonData}
           setJsonLoading={setJsonLoading}
+          currentSessionJsonData={jsonData}
+          onUpdateSessionFiles={handleUpdateSessionFiles}
+          currentSessionFiles={
+            chatSessions.find((s) => s.id === sessionId)?.uploadedFiles || []
+          }
         />
       </div>
 

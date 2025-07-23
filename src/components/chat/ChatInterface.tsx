@@ -7,7 +7,7 @@ import {
   FiLoader,
   FiFileText,
 } from "react-icons/fi";
-import { Message, ResponseData, Citation } from "./ChatLayout";
+import { Message, ResponseData, Citation, UploadedFile } from "./ChatLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -23,6 +23,9 @@ interface ChatInterfaceProps {
   sessionId: string | null;
   setJsonData: (jsonData: any) => void;
   setJsonLoading: (loading: boolean) => void;
+  currentSessionJsonData: any;
+  onUpdateSessionFiles: (files: UploadedFile[]) => void;
+  currentSessionFiles: UploadedFile[];
 }
 
 // API configuration
@@ -35,6 +38,9 @@ export const ChatInterface = ({
   sessionId,
   setJsonData,
   setJsonLoading,
+  currentSessionJsonData,
+  onUpdateSessionFiles,
+  currentSessionFiles,
 }: ChatInterfaceProps) => {
   const [inputText, setInputText] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -49,6 +55,7 @@ export const ChatInterface = ({
     query: string;
     isLoading: boolean;
   } | null>(null);
+  const [viewingFile, setViewingFile] = useState<UploadedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messageContainerRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -91,7 +98,7 @@ export const ChatInterface = ({
         };
 
         recognition.onerror = (event) => {
-          console.error("Speech recognition error:", event.error);
+          console.log("Speech recognition error:", event.error);
           setIsListening(false);
           toast({
             title: "Speech recognition error",
@@ -134,7 +141,6 @@ export const ChatInterface = ({
       .then((res) => {
         console.log(res.data);
         setJsonData(res.data?.structured_data);
-        console.log(res.data, "handleExtractPolicyData");
       })
       .catch((err) => {
         console.log(err);
@@ -154,7 +160,6 @@ export const ChatInterface = ({
       .then((res) => {
         console.log(res.data);
         handleExtractPolicyData();
-        console.log(res.data, "handlePopulateSession");
       })
       .catch((err) => {
         console.log(err);
@@ -222,7 +227,10 @@ export const ChatInterface = ({
 
     try {
       setIsUploading(true);
-      console.log(file, "file");
+      
+      // Read file content for display
+      const fileContent = await readFileContent(file);
+      
       const formData = new FormData();
       formData.append("files", file);
       formData.append("session_id", sessionId);
@@ -240,6 +248,28 @@ export const ChatInterface = ({
       }
 
       const result = await response.json();
+      
+      // Add uploaded file to session
+      const uploadedFile: UploadedFile = {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        uploadedAt: new Date(),
+        content: fileContent,
+      };
+      
+      const updatedFiles = [...currentSessionFiles, uploadedFile];
+      onUpdateSessionFiles(updatedFiles);
+      
+      // Create a file upload message in chat
+      const fileMessage: Message = {
+        query: `Uploaded file: ${file.name}`,
+        response: `File "${file.name}" (${(file.size / 1024).toFixed(1)}KB) has been uploaded successfully and is being processed.`,
+        attachedFile: uploadedFile,
+      };
+      
+      onSendMessage(`Uploaded file: ${file.name}`, file.name, fileMessage);
+      
       handlePopulateSession();
 
       return true;
@@ -255,6 +285,24 @@ export const ChatInterface = ({
     } finally {
       setIsUploading(false);
     }
+  };
+
+  // Helper function to read file content based on file type
+  const readFileContent = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = (e) => reject(e);
+      
+      // Handle different file types
+      if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+        // For images and PDFs, read as data URL for display
+        reader.readAsDataURL(file);
+      } else {
+        // For text files, read as text
+        reader.readAsText(file);
+      }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -282,8 +330,8 @@ export const ChatInterface = ({
     const messageText = inputText.trim() || "Files uploaded";
     const fileNames = selectedFiles.map((file) => file.name).join(", ");
 
-    // If there's text input, send it as a question
-    if (inputText.trim() !== "") {
+    // If there's text input and files have been uploaded, send it as a question
+    if (inputText.trim() !== "" && currentSessionJsonData) {
       await handleQuestionAnswer(inputText.trim());
     }
 
@@ -378,12 +426,22 @@ export const ChatInterface = ({
         <div className="max-w-4xl mx-auto space-y-4">
           {messages.length === 0 ? (
             <div className="text-center py-12">
-              <div className="text-4xl mb-4">💬</div>
+              <div className="text-4xl mb-4">
+                {isUploading || isPopulating || isExtracting ? "⏳" : "📄"}
+              </div>
               <h3 className="text-lg font-semibold mb-2">
-                Start a conversation
+                {isUploading || isPopulating || isExtracting
+                  ? "Processing your document..."
+                  : !currentSessionJsonData
+                  ? "Upload a document to get started"
+                  : "Start a conversation"}
               </h3>
               <p className="text-muted-foreground">
-                Send a message to begin chatting with the AI assistant
+                {isUploading || isPopulating || isExtracting
+                  ? "Please wait while we are getting JSON data from your file"
+                  : !currentSessionJsonData
+                  ? "Please upload a document first, then you can ask questions about it"
+                  : "Send a message to begin chatting with the AI assistant"}
               </p>
             </div>
           ) : (
@@ -394,6 +452,38 @@ export const ChatInterface = ({
                   <div className="flex justify-end">
                     <div className="max-w-xs lg:max-w-md px-4 py-3 rounded-lg animate-fade-in bg-message-user text-message-user-fg">
                       <div className="text-sm">{message.query}</div>
+                      {/* File Attachment */}
+                      {message.attachedFile && (
+                        <div className="mt-2 p-2 bg-black/10 dark:bg-white/10 rounded border">
+                          <button
+                            onClick={() => setViewingFile(message.attachedFile!)}
+                            className="flex items-center gap-2 text-xs hover:underline mb-2"
+                          >
+                            {message.attachedFile.type.startsWith('image/') ? (
+                              <span className="text-green-500">🖼️</span>
+                            ) : message.attachedFile.type === 'application/pdf' ? (
+                              <span className="text-red-500">📄</span>
+                            ) : (
+                              <FiFileText className="h-3 w-3" />
+                            )}
+                            <span>{message.attachedFile.name}</span>
+                            <span className="text-opacity-70">
+                              ({(message.attachedFile.size / 1024).toFixed(1)}KB)
+                            </span>
+                          </button>
+                          {/* Image Preview */}
+                          {message.attachedFile.type.startsWith('image/') && (
+                            <div className="mt-1">
+                              <img
+                                src={message.attachedFile.content}
+                                alt={message.attachedFile.name}
+                                className="max-w-full max-h-32 object-contain rounded cursor-pointer"
+                                onClick={() => setViewingFile(message.attachedFile!)}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -449,8 +539,8 @@ export const ChatInterface = ({
                                   Sources ({message.response.citations.length}):
                                 </div>
                                 <div className="space-y-2">
-                                  {message.response.citations
-                                    .map((citation, citationIndex) => (
+                                  {message.response.citations.map(
+                                    (citation, citationIndex) => (
                                       <div
                                         key={citationIndex}
                                         className="bg-muted/50 rounded p-2 text-xs"
@@ -473,7 +563,8 @@ export const ChatInterface = ({
                                           {citation.text_snippet}
                                         </div>
                                       </div>
-                                    ))}
+                                    )
+                                  )}
                                   {/* {message.response.citations.length > 3 && (
                                     <div className="text-xs text-muted-foreground">
                                       +{message.response.citations.length - 3}{" "}
@@ -542,6 +633,31 @@ export const ChatInterface = ({
       {/* Input Area */}
       <div className="border-t border-chat-border bg-chat-bg px-4 py-4 sticky bottom-0">
         <div className="max-w-4xl mx-auto">
+          {/* File Upload Status */}
+          {!currentSessionJsonData && selectedFiles.length === 0 && (
+            <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
+                {isUploading || isPopulating || isExtracting ? (
+                  <>
+                    <FiLoader className="h-4 w-4 animate-spin" />
+                    <span>
+                      Please wait while we are getting JSON data from your file...
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <FiPaperclip className="h-4 w-4" />
+                    <span>
+                      Upload a document to start chatting with the AI assistant
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+
+
           {/* Selected Files Display - Above Input */}
           {selectedFiles.length > 0 && (
             <div className="flex items-center gap-2 mb-2">
@@ -599,10 +715,18 @@ export const ChatInterface = ({
               <Input
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder="How can I help you today?"
+                placeholder={
+                  !currentSessionJsonData
+                    ? "Please upload a document first..."
+                    : "How can I help you today?"
+                }
                 className="flex-1"
                 disabled={
-                  isUploading || isPopulating || isExtracting || isAnswering
+                  !currentSessionJsonData ||
+                  isUploading ||
+                  isPopulating ||
+                  isExtracting ||
+                  isAnswering
                 }
               />
 
@@ -641,7 +765,11 @@ export const ChatInterface = ({
                       : ""
                   }`}
                   disabled={
-                    isUploading || isPopulating || isExtracting || isAnswering
+                    !currentSessionJsonData ||
+                    isUploading ||
+                    isPopulating ||
+                    isExtracting ||
+                    isAnswering
                   }
                 >
                   {isListening ? (
@@ -656,6 +784,7 @@ export const ChatInterface = ({
             <Button
               type="submit"
               disabled={
+                (!currentSessionJsonData && selectedFiles.length === 0) ||
                 (!inputText.trim() && selectedFiles.length === 0) ||
                 isUploading ||
                 isPopulating ||
@@ -673,6 +802,76 @@ export const ChatInterface = ({
           </form>
         </div>
       </div>
+
+      {/* File Viewer Modal */}
+      {viewingFile && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={`bg-background border border-border rounded-lg w-full flex flex-col ${
+            viewingFile.type === 'application/pdf' 
+              ? 'max-w-6xl h-[95vh]' 
+              : viewingFile.type.startsWith('image/')
+              ? 'max-w-6xl max-h-[90vh]'
+              : 'max-w-4xl max-h-[80vh]'
+          }`}>
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <FiFileText className="h-5 w-5" />
+                <div>
+                  <h3 className="font-semibold">{viewingFile.name}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {(viewingFile.size / 1024).toFixed(1)}KB • {viewingFile.type} • 
+                    Uploaded {viewingFile.uploadedAt.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setViewingFile(null)}
+                className="h-8 w-8 p-0"
+              >
+                ×
+              </Button>
+            </div>
+            
+            {/* Modal Content */}
+            <div className={`flex-1 overflow-auto ${viewingFile.type === 'application/pdf' ? '' : 'p-4'}`}>
+              {viewingFile.type.startsWith('image/') ? (
+                <div className="flex justify-center h-full">
+                  <img 
+                    src={viewingFile.content} 
+                    alt={viewingFile.name}
+                    className="max-w-full max-h-full object-contain rounded border"
+                  />
+                </div>
+              ) : viewingFile.type === 'application/pdf' ? (
+                <iframe
+                  src={viewingFile.content}
+                  className="w-full h-full border-0"
+                  title={viewingFile.name}
+                />
+              ) : (
+                <pre className="whitespace-pre-wrap text-sm font-mono bg-muted/50 p-4 rounded border">
+                  {viewingFile.content || "No content available"}
+                </pre>
+              )}
+            </div>
+            
+            {/* Modal Footer */}
+            {viewingFile.type !== 'application/pdf' && (
+              <div className="flex justify-end gap-2 p-4 border-t border-border">
+                <Button
+                  variant="outline"
+                  onClick={() => setViewingFile(null)}
+                >
+                  Close
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
