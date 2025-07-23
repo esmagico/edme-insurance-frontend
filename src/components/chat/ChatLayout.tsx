@@ -247,6 +247,7 @@ export const ChatLayout = () => {
         currentChatId={sessionId}
         onNewChat={startNewChat}
         onLoadChat={loadChatSession}
+        isDark={isDark}
       />
 
       {/* Main Content */}
@@ -275,6 +276,7 @@ export const ChatLayout = () => {
           onToggle={() => setRightSidebarOpen(!rightSidebarOpen)}
           jsonData={jsonData}
           loading={jsonLoading}
+          isDark={isDark}
         />
       )}
     </div>

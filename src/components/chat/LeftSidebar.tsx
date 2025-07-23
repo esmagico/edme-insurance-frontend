@@ -16,6 +16,7 @@ interface LeftSidebarProps {
   currentChatId: string | null; // Keep as currentChatId for prop compatibility
   onNewChat: () => void;
   onLoadChat: (sessionId: string) => void;
+  isDark: boolean;
 }
 
 export const LeftSidebar = ({
@@ -25,6 +26,7 @@ export const LeftSidebar = ({
   currentChatId,
   onNewChat,
   onLoadChat,
+  isDark,
 }: LeftSidebarProps) => {
   const [width, setWidth] = useState(320);
   const [isResizing, setIsResizing] = useState(false);
@@ -148,8 +150,12 @@ export const LeftSidebar = ({
                     variant="ghost"
                     className={`w-full justify-start p-0 h-auto text-left relative rounded-xl transition-all duration-200 group border border-transparent ${
                       currentChatId === session.id
-                        ? "bg-white shadow-md border-border/20"
-                        : "hover:bg-white hover:shadow-sm"
+                        ? isDark 
+                          ? "bg-slate-800 shadow-md border-slate-700/50" 
+                          : "bg-white shadow-md border-border/20"
+                        : isDark
+                          ? "hover:bg-slate-800/70 hover:shadow-sm"
+                          : "hover:bg-white hover:shadow-sm"
                     }`}
                     onClick={() => onLoadChat(session.id)}
                   >
