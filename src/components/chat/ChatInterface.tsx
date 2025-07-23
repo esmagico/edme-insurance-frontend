@@ -18,6 +18,7 @@ import axios from "axios";
 interface ChatInterfaceProps {
   messages: Message[];
   onSendMessage: (text: string, fileName?: string, message?: Message) => void;
+  onUpdateMessage: (messageId: string, updatedResponse: string) => void;
   isDark: boolean;
   setIsDark: (isDark: boolean) => void;
   sessionId: string | null;
@@ -33,6 +34,7 @@ interface ChatInterfaceProps {
 export const ChatInterface = ({
   messages,
   onSendMessage,
+  onUpdateMessage,
   isDark,
   setIsDark,
   sessionId,
@@ -49,6 +51,8 @@ export const ChatInterface = ({
   const [isPopulating, setIsPopulating] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isAnswering, setIsAnswering] = useState(false);
+  const [currentProcessingStep, setCurrentProcessingStep] =
+    useState<string>("");
   const [speechSupported, setSpeechSupported] = useState(false);
   const [baseText, setBaseText] = useState("");
   const [pendingMessage, setPendingMessage] = useState<{
@@ -56,6 +60,9 @@ export const ChatInterface = ({
     isLoading: boolean;
   } | null>(null);
   const [viewingFile, setViewingFile] = useState<UploadedFile | null>(null);
+  const [processingMessageId, setProcessingMessageId] = useState<string | null>(
+    null
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messageContainerRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -169,10 +176,71 @@ export const ChatInterface = ({
       });
   };
 
+  const handlePopulateSessionWithProgress = async (
+    messageId: string,
+    fileName: string,
+    fileSize: string
+  ) => {
+    try {
+      // Step 1: Populating (Upload done, Populating in progress, Extracting pending)
+      setCurrentProcessingStep("Populating session with file data...");
+      onUpdateMessage(
+        messageId,
+        `✅ File "${fileName}" (${fileSize}KB) uploaded successfully\n🔄 Populating session with file data...\n⏳ Extracting JSON data from file...`
+      );
+      setIsPopulating(true);
+
+      const populateRes = await axios.post(`${baseUrl}/populateSession`, {
+        session_id: sessionId,
+      });
+
+      console.log(populateRes.data, "handlePopulateSession");
+      setIsPopulating(false);
+
+      // Step 2: Extracting (Upload done, Populating done, Extracting in progress)
+      setCurrentProcessingStep("Extracting JSON data from file...");
+      onUpdateMessage(
+        messageId,
+        `✅ File "${fileName}" (${fileSize}KB) uploaded successfully\n✅ Session populated successfully\n🔄 Extracting JSON data from file...`
+      );
+      setIsExtracting(true);
+      setJsonLoading(true);
+
+      const extractRes = await axios.post(`${baseUrl}/extractPolicyData`, {
+        session_id: sessionId,
+      });
+
+      console.log(extractRes.data, "handleExtractPolicyData");
+      setJsonData(extractRes.data?.structured_data);
+      setIsExtracting(false);
+      setJsonLoading(false);
+
+      // Step 3: Complete (All steps done)
+      setCurrentProcessingStep("");
+      onUpdateMessage(
+        messageId,
+        `✅ File "${fileName}" (${fileSize}KB) uploaded successfully\n✅ Session populated successfully\n✅ JSON data extracted successfully\n\n🎉 Your file is ready! You can now ask questions about it.`
+      );
+    } catch (err) {
+      console.log(err);
+      setCurrentProcessingStep("");
+      onUpdateMessage(
+        messageId,
+        `✅ File "${fileName}" (${fileSize}KB) uploaded successfully\n❌ Error occurred during processing. Please try again.`
+      );
+      setIsPopulating(false);
+      setIsExtracting(false);
+      setJsonLoading(false);
+    } finally {
+      setProcessingMessageId(null);
+    }
+  };
+
   const handleQuestionAnswer = async (question: string) => {
     // Show question immediately with loading state
     setPendingMessage({ query: question, isLoading: true });
     setIsAnswering(true);
+    setCurrentProcessingStep("Thinking...");
 
     try {
       const response = await axios.post(`${baseUrl}/fetchResponse`, {
@@ -211,6 +279,7 @@ export const ChatInterface = ({
       onSendMessage(question, undefined, errorMessage);
     } finally {
       setIsAnswering(false);
+      setCurrentProcessingStep("");
     }
   };
 
@@ -227,10 +296,11 @@ export const ChatInterface = ({
 
     try {
       setIsUploading(true);
-      
+      setCurrentProcessingStep("Uploading file...");
+
       // Read file content for display
       const fileContent = await readFileContent(file);
-      
+
       const formData = new FormData();
       formData.append("files", file);
       formData.append("session_id", sessionId);
@@ -248,7 +318,7 @@ export const ChatInterface = ({
       }
 
       const result = await response.json();
-      
+
       // Add uploaded file to session
       const uploadedFile: UploadedFile = {
         name: file.name,
@@ -257,20 +327,30 @@ export const ChatInterface = ({
         uploadedAt: new Date(),
         content: fileContent,
       };
-      
+
       const updatedFiles = [...currentSessionFiles, uploadedFile];
       onUpdateSessionFiles(updatedFiles);
-      
-      // Create a file upload message in chat
+
+      // Create a file upload message in chat with progressive updates
+      const messageId = Date.now().toString();
       const fileMessage: Message = {
+        id: messageId,
         query: `Uploaded file: ${file.name}`,
-        response: `File "${file.name}" (${(file.size / 1024).toFixed(1)}KB) has been uploaded successfully and is being processed.`,
+        response: `✅ File "${file.name}" (${(file.size / 1024).toFixed(
+          1
+        )}KB) uploaded successfully\n⏳ Populating session with file data...\n⏳ Extracting JSON data from file...`,
         attachedFile: uploadedFile,
       };
-      
+
       onSendMessage(`Uploaded file: ${file.name}`, file.name, fileMessage);
-      
-      handlePopulateSession();
+      setProcessingMessageId(messageId);
+
+      // Start the processing chain
+      await handlePopulateSessionWithProgress(
+        messageId,
+        file.name,
+        (file.size / 1024).toFixed(1)
+      );
 
       return true;
     } catch (error) {
@@ -284,6 +364,9 @@ export const ChatInterface = ({
       return false;
     } finally {
       setIsUploading(false);
+      if (!processingMessageId) {
+        setCurrentProcessingStep("");
+      }
     }
   };
 
@@ -293,11 +376,31 @@ export const ChatInterface = ({
       const reader = new FileReader();
       reader.onload = (e) => resolve(e.target?.result as string);
       reader.onerror = (e) => reject(e);
-      
+
       // Handle different file types
-      if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+      if (file.type.startsWith("image/") || file.type === "application/pdf") {
         // For images and PDFs, read as data URL for display
         reader.readAsDataURL(file);
+      } else if (
+        file.type === "application/vnd.ms-excel" ||
+        file.type ===
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+        file.name.endsWith(".xls") ||
+        file.name.endsWith(".xlsx") ||
+        file.type === "application/vnd.ms-powerpoint" ||
+        file.type ===
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+        file.type === "application/msword" ||
+        file.type ===
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        file.name.endsWith(".ppt") ||
+        file.name.endsWith(".pptx") ||
+        file.name.endsWith(".doc") ||
+        file.name.endsWith(".docx")
+      ) {
+        // For Office files, don't read content - just resolve with empty string
+        // These files will be handled by their specific viewers
+        resolve("");
       } else {
         // For text files, read as text
         reader.readAsText(file);
@@ -389,28 +492,10 @@ export const ChatInterface = ({
       <div className="h-[61px] flex items-center justify-between px-4 border-b border-chat-border bg-chat-bg">
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-semibold">AI Chat Assistant</h1>
-          {isUploading && (
+          {currentProcessingStep && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <FiLoader className="h-4 w-4 animate-spin" />
-              Uploading...
-            </div>
-          )}
-          {isPopulating && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <FiLoader className="h-4 w-4 animate-spin" />
-              Populating...
-            </div>
-          )}
-          {isExtracting && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <FiLoader className="h-4 w-4 animate-spin" />
-              Extracting...
-            </div>
-          )}
-          {isAnswering && !isUploading && !isPopulating && !isExtracting && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <FiLoader className="h-4 w-4 animate-spin" />
-              Thinking...
+              {currentProcessingStep}
             </div>
           )}
         </div>
@@ -456,29 +541,56 @@ export const ChatInterface = ({
                       {message.attachedFile && (
                         <div className="mt-2 p-2 bg-black/10 dark:bg-white/10 rounded border">
                           <button
-                            onClick={() => setViewingFile(message.attachedFile!)}
+                            onClick={() =>
+                              setViewingFile(message.attachedFile!)
+                            }
                             className="flex items-center gap-2 text-xs hover:underline mb-2"
                           >
-                            {message.attachedFile.type.startsWith('image/') ? (
+                            {message.attachedFile.type.startsWith("image/") ? (
                               <span className="text-green-500">🖼️</span>
-                            ) : message.attachedFile.type === 'application/pdf' ? (
+                            ) : message.attachedFile.type ===
+                              "application/pdf" ? (
                               <span className="text-red-500">📄</span>
+                            ) : message.attachedFile.type ===
+                                "application/vnd.ms-excel" ||
+                              message.attachedFile.type ===
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+                              message.attachedFile.name.endsWith(".xls") ||
+                              message.attachedFile.name.endsWith(".xlsx") ? (
+                              <span className="text-green-600">📊</span>
+                            ) : message.attachedFile.type ===
+                                "application/vnd.ms-powerpoint" ||
+                              message.attachedFile.type ===
+                                "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+                              message.attachedFile.name.endsWith(".ppt") ||
+                              message.attachedFile.name.endsWith(".pptx") ? (
+                              <span className="text-orange-600">📊</span>
+                            ) : message.attachedFile.type ===
+                                "application/msword" ||
+                              message.attachedFile.type ===
+                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+                              message.attachedFile.name.endsWith(".doc") ||
+                              message.attachedFile.name.endsWith(".docx") ? (
+                              <span className="text-blue-600">📄</span>
                             ) : (
                               <FiFileText className="h-3 w-3" />
                             )}
                             <span>{message.attachedFile.name}</span>
                             <span className="text-opacity-70">
-                              ({(message.attachedFile.size / 1024).toFixed(1)}KB)
+                              ({(message.attachedFile.size / 1024).toFixed(1)}
+                              KB)
                             </span>
                           </button>
                           {/* Image Preview */}
-                          {message.attachedFile.type.startsWith('image/') && (
+                          {message.attachedFile.type.startsWith("image/") && (
                             <div className="mt-1">
                               <img
                                 src={message.attachedFile.content}
                                 alt={message.attachedFile.name}
                                 className="max-w-full max-h-32 object-contain rounded cursor-pointer"
-                                onClick={() => setViewingFile(message.attachedFile!)}
+                                onClick={() =>
+                                  setViewingFile(message.attachedFile!)
+                                }
                               />
                             </div>
                           )}
@@ -491,7 +603,25 @@ export const ChatInterface = ({
                   <div className="flex justify-start">
                     <div className="max-w-2xl lg:max-w-3xl px-4 py-3 rounded-lg animate-fade-in bg-message-assistant text-message-assistant-fg border border-border">
                       {typeof message.response === "string" ? (
-                        <div className="text-sm">{message.response}</div>
+                        <div className="text-sm">
+                          {message.response
+                            .split("\n")
+                            .map((line, lineIndex) => (
+                              <div
+                                key={lineIndex}
+                                className="flex items-center gap-2 mb-1"
+                              >
+                                {line.startsWith("🔄") ? (
+                                  <>
+                                    <FiLoader className="h-3 w-3 animate-spin text-blue-500" />
+                                    <span>{line.substring(2)}</span>
+                                  </>
+                                ) : (
+                                  <span>{line}</span>
+                                )}
+                              </div>
+                            ))}
+                        </div>
                       ) : (
                         <div className="space-y-3">
                           {/* Main Answer */}
@@ -593,32 +723,27 @@ export const ChatInterface = ({
 
                   {/* Skeleton Loader for Assistant Response */}
                   <div className="flex justify-start">
-                    <div className="max-w-2xl lg:max-w-3xl px-4 py-3 rounded-lg animate-fade-in bg-message-assistant text-message-assistant-fg border border-border">
-                      <div className="space-y-3">
-                        {/* Main answer skeleton */}
-                        <div className="space-y-2">
-                          <div className="h-4 bg-muted rounded animate-pulse"></div>
-                          <div className="h-4 bg-muted rounded animate-pulse w-3/4"></div>
-                          <div className="h-4 bg-muted rounded animate-pulse w-1/2"></div>
+                    <div className="max-w-2xl lg:max-w-3xl px-4 py-3 rounded-lg animate-fade-in bg-gray-50 text-gray-700 border border-gray-200">
+                      <div className="space-y-2">
+                        <div
+                          className="h-4 bg-gray-200 rounded animate-pulse"
+                          style={{ width: "calc(100% - 20px)" }}
+                        >
+                          <span style={{ visibility: "hidden" }}>
+                            Lorem ipsum dolor sit amet consectetur adipisicing
+                            elit. Eos, iure! Eius natus numquam porro eveniet,
+                            odio ut sunt optio molestias!
+                          </span>
                         </div>
-
-                        {/* Confidence skeleton */}
-                        <div className="border-t pt-2">
-                          <div className="flex items-center gap-2">
-                            <div className="h-3 bg-muted rounded animate-pulse w-16"></div>
-                            <div className="h-2 bg-muted rounded animate-pulse w-16"></div>
-                            <div className="h-3 bg-muted rounded animate-pulse w-8"></div>
-                          </div>
-                        </div>
-
-                        {/* Sources skeleton */}
-                        <div className="border-t pt-2 space-y-2">
-                          <div className="h-3 bg-muted rounded animate-pulse w-20"></div>
-                          <div className="bg-muted/50 rounded p-2 space-y-1">
-                            <div className="h-3 bg-muted rounded animate-pulse w-32"></div>
-                            <div className="h-3 bg-muted rounded animate-pulse"></div>
-                            <div className="h-3 bg-muted rounded animate-pulse w-2/3"></div>
-                          </div>
+                        <div
+                          className="h-4 bg-gray-200 rounded animate-pulse"
+                          style={{ width: "calc(100% - 20px)" }}
+                        >
+                          <span style={{ visibility: "hidden" }}>
+                            Saepe, modi voluptatibus voluptate cupiditate
+                            dolorem inventore ipsa totam doloribus excepturi
+                            quaerat voluptas.
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -641,7 +766,8 @@ export const ChatInterface = ({
                   <>
                     <FiLoader className="h-4 w-4 animate-spin" />
                     <span>
-                      Please wait while we are getting JSON data from your file...
+                      Please wait while we are getting JSON data from your
+                      file...
                     </span>
                   </>
                 ) : (
@@ -655,8 +781,6 @@ export const ChatInterface = ({
               </div>
             </div>
           )}
-
-
 
           {/* Selected Files Display - Above Input */}
           {selectedFiles.length > 0 && (
@@ -806,13 +930,15 @@ export const ChatInterface = ({
       {/* File Viewer Modal */}
       {viewingFile && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className={`bg-background border border-border rounded-lg w-full flex flex-col ${
-            viewingFile.type === 'application/pdf' 
-              ? 'max-w-6xl h-[95vh]' 
-              : viewingFile.type.startsWith('image/')
-              ? 'max-w-6xl max-h-[90vh]'
-              : 'max-w-4xl max-h-[80vh]'
-          }`}>
+          <div
+            className={`bg-background border border-border rounded-lg w-full flex flex-col ${
+              viewingFile.type === "application/pdf"
+                ? "max-w-6xl h-[95vh]"
+                : viewingFile.type.startsWith("image/")
+                ? "max-w-6xl max-h-[90vh]"
+                : "max-w-4xl max-h-[80vh]"
+            }`}
+          >
             {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-border">
               <div className="flex items-center gap-2">
@@ -820,8 +946,9 @@ export const ChatInterface = ({
                 <div>
                   <h3 className="font-semibold">{viewingFile.name}</h3>
                   <p className="text-sm text-muted-foreground">
-                    {(viewingFile.size / 1024).toFixed(1)}KB • {viewingFile.type} • 
-                    Uploaded {viewingFile.uploadedAt.toLocaleString()}
+                    {(viewingFile.size / 1024).toFixed(1)}KB •{" "}
+                    {viewingFile.type} • Uploaded{" "}
+                    {viewingFile.uploadedAt.toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -834,37 +961,127 @@ export const ChatInterface = ({
                 ×
               </Button>
             </div>
-            
+
             {/* Modal Content */}
-            <div className={`flex-1 overflow-auto ${viewingFile.type === 'application/pdf' ? '' : 'p-4'}`}>
-              {viewingFile.type.startsWith('image/') ? (
+            <div
+              className={`flex-1 overflow-auto ${
+                viewingFile.type === "application/pdf" ? "" : "p-4"
+              }`}
+            >
+              {viewingFile.type.startsWith("image/") ? (
                 <div className="flex justify-center h-full">
-                  <img 
-                    src={viewingFile.content} 
+                  <img
+                    src={viewingFile.content}
                     alt={viewingFile.name}
                     className="max-w-full max-h-full object-contain rounded border"
                   />
                 </div>
-              ) : viewingFile.type === 'application/pdf' ? (
+              ) : viewingFile.type === "application/pdf" ? (
                 <iframe
                   src={viewingFile.content}
                   className="w-full h-full border-0"
                   title={viewingFile.name}
                 />
+              ) : viewingFile.type === "application/vnd.ms-excel" ||
+                viewingFile.type ===
+                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+                viewingFile.name.endsWith(".xls") ||
+                viewingFile.name.endsWith(".xlsx") ? (
+                <div className="flex items-center justify-center h-full min-h-[400px]">
+                  <div className="text-center p-8 bg-muted/20 rounded-lg border max-w-md">
+                    <div className="text-6xl mb-4">📊</div>
+                    <h3 className="text-lg font-semibold mb-2">Excel File</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Excel files cannot be previewed directly in the browser.
+                      The file has been uploaded successfully and is ready for
+                      processing.
+                    </p>
+                    <div className="text-sm text-muted-foreground space-y-1">
+                      <div>
+                        <strong>File:</strong> {viewingFile.name}
+                      </div>
+                      <div>
+                        <strong>Size:</strong>{" "}
+                        {(viewingFile.size / 1024).toFixed(1)}KB
+                      </div>
+                      <div>
+                        <strong>Type:</strong>{" "}
+                        {viewingFile.type || "Excel Spreadsheet"}
+                      </div>
+                      <div>
+                        <strong>Uploaded:</strong>{" "}
+                        {viewingFile.uploadedAt.toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : viewingFile.type === "application/vnd.ms-powerpoint" ||
+                viewingFile.type ===
+                  "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+                viewingFile.name.endsWith(".ppt") ||
+                viewingFile.name.endsWith(".pptx") ? (
+                <div className="w-full h-full min-h-[600px] relative">
+                  <div className="absolute inset-0 flex items-center justify-center bg-muted/10">
+                    <div className="text-center p-8 bg-background rounded-lg border shadow-lg max-w-md">
+                      <div className="text-6xl mb-4">📊</div>
+                      <h3 className="text-lg font-semibold mb-2">
+                        PowerPoint File
+                      </h3>
+                      <p className="text-muted-foreground mb-4">
+                        PowerPoint files cannot be previewed directly in the
+                        browser. The file has been uploaded successfully and is
+                        ready for processing.
+                      </p>
+                      <div className="text-sm text-muted-foreground">
+                        <div>File: {viewingFile.name}</div>
+                        <div>
+                          Size: {(viewingFile.size / 1024).toFixed(1)}KB
+                        </div>
+                        <div>
+                          Type: {viewingFile.type || "PowerPoint Presentation"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : viewingFile.type === "application/msword" ||
+                viewingFile.type ===
+                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+                viewingFile.name.endsWith(".doc") ||
+                viewingFile.name.endsWith(".docx") ? (
+                <div className="w-full h-full min-h-[600px] relative">
+                  <div className="absolute inset-0 flex items-center justify-center bg-muted/10">
+                    <div className="text-center p-8 bg-background rounded-lg border shadow-lg max-w-md">
+                      <div className="text-6xl mb-4">📄</div>
+                      <h3 className="text-lg font-semibold mb-2">
+                        Word Document
+                      </h3>
+                      <p className="text-muted-foreground mb-4">
+                        Word documents cannot be previewed directly in the
+                        browser. The file has been uploaded successfully and is
+                        ready for processing.
+                      </p>
+                      <div className="text-sm text-muted-foreground">
+                        <div>File: {viewingFile.name}</div>
+                        <div>
+                          Size: {(viewingFile.size / 1024).toFixed(1)}KB
+                        </div>
+                        <div>Type: {viewingFile.type || "Word Document"}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               ) : (
                 <pre className="whitespace-pre-wrap text-sm font-mono bg-muted/50 p-4 rounded border">
                   {viewingFile.content || "No content available"}
                 </pre>
               )}
             </div>
-            
+
             {/* Modal Footer */}
-            {viewingFile.type !== 'application/pdf' && (
+            {viewingFile.type !== "application/pdf" && (
               <div className="flex justify-end gap-2 p-4 border-t border-border">
-                <Button
-                  variant="outline"
-                  onClick={() => setViewingFile(null)}
-                >
+                <Button variant="outline" onClick={() => setViewingFile(null)}>
                   Close
                 </Button>
               </div>

@@ -1,8 +1,13 @@
-import { FiPlus, FiMessageSquare, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
-import { ChatSession } from './ChatLayout';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { useState, useRef, useCallback, useEffect } from 'react';
+import {
+  FiPlus,
+  FiMessageSquare,
+  FiChevronLeft,
+  FiChevronRight,
+} from "react-icons/fi";
+import { ChatSession } from "./ChatLayout";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 interface LeftSidebarProps {
   isOpen: boolean;
@@ -31,14 +36,17 @@ export const LeftSidebar = ({
     setIsResizing(true);
   }, []);
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isResizing) return;
-    
-    const newWidth = e.clientX;
-    if (newWidth >= 200 && newWidth <= 500) {
-      setWidth(newWidth);
-    }
-  }, [isResizing]);
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isResizing) return;
+
+      const newWidth = e.clientX;
+      if (newWidth >= 200 && newWidth <= 500) {
+        setWidth(newWidth);
+      }
+    },
+    [isResizing]
+  );
 
   const handleMouseUp = useCallback(() => {
     setIsResizing(false);
@@ -46,100 +54,130 @@ export const LeftSidebar = ({
 
   useEffect(() => {
     if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
     } else {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
     }
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
     };
   }, [isResizing, handleMouseMove, handleMouseUp]);
 
   return (
-    <div 
+    <div
       ref={sidebarRef}
-      className={`relative border-r border-sidebar-border bg-sidebar-bg flex flex-col ${
-        isOpen ? '' : 'w-16'
-      } ${!isOpen ? 'transition-all duration-300 ease-in-out' : ''}`}
+      className={`relative border-r border-border/50 bg-background/95 backdrop-blur-sm flex flex-col transition-all duration-300 ease-in-out ${
+        isOpen ? "" : "w-16"
+      }`}
       style={isOpen ? { width: `${width}px` } : undefined}
     >
       {/* Top Section with Toggle and New Chat */}
-      <div className="flex flex-col gap-2 p-4 border-b border-sidebar-border bg-background/50">
+      <div className="flex flex-col gap-3 p-4 border-b border-border/30">
         <Button
           variant="ghost"
           size="sm"
           onClick={onToggle}
-          className="w-full justify-start p-2.5 hover:bg-accent/10 rounded-lg"
+          className={`w-full p-3 hover:bg-white hover:shadow-sm rounded-xl transition-all duration-200 group ${
+            isOpen ? "justify-start" : "justify-center"
+          }`}
         >
-          {isOpen ? <FiChevronLeft className="h-5 w-5" /> : <FiChevronRight className="h-5 w-5" />}
-          {isOpen && <span className="ml-2 font-medium">Collapse sidebar</span>}
+          {isOpen ? (
+            <FiChevronLeft className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+          ) : (
+            <FiChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+          )}
+          {isOpen && (
+            <span className="ml-3 text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+              Collapse sidebar
+            </span>
+          )}
         </Button>
 
         <Button
           onClick={onNewChat}
-          className="w-full justify-start gap-2 bg-primary/90 hover:bg-primary text-primary-foreground shadow-sm rounded-lg p-2.5"
+          className={`w-full gap-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl rounded-xl p-3 transition-all duration-200 font-medium ${
+            isOpen ? "justify-start" : "justify-center"
+          }`}
           size={isOpen ? "default" : "sm"}
         >
-          <FiPlus className="h-5 w-5" />
-          {isOpen && <span className="font-medium">New conversation</span>}
+          <FiPlus className="h-4 w-4" />
+          {isOpen && <span className="text-sm">New conversation</span>}
         </Button>
       </div>
 
       {/* Chats Section */}
       {isOpen && (
         <div className="flex-1 overflow-hidden">
-          <div className="px-4 py-3">
-            <div className="flex items-center gap-2">
-              <FiMessageSquare className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-semibold text-foreground/90">Recent Conversations</span>
+          <div className="px-4 py-4">
+            <div className="flex items-center gap-2.5">
+              <FiMessageSquare className="h-4 w-4 text-muted-foreground/70" />
+              <span className="text-xs font-semibold text-muted-foreground/90 uppercase tracking-wider">
+                Recent Conversations
+              </span>
             </div>
           </div>
-          
+
           <ScrollArea className="h-[calc(100vh-180px)] px-2">
             {recentChats.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-32 text-center px-4">
-                <p className="text-sm text-muted-foreground">No conversations yet</p>
-                <p className="text-xs text-muted-foreground mt-1">Click 'New conversation' to get started</p>
+                <div className="w-12 h-12 rounded-full bg-muted/30 flex items-center justify-center mb-3">
+                  <FiMessageSquare className="h-5 w-5 text-muted-foreground/50" />
+                </div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  No conversations yet
+                </p>
+                <p className="text-xs text-muted-foreground/70 mt-1">
+                  Start a new conversation to get started
+                </p>
               </div>
             ) : (
               <div className="space-y-1 px-2">
                 {recentChats.map((session) => (
                   <Button
                     key={`recent-${session.id}`}
-                    variant={currentChatId === session.id ? "secondary" : "ghost"}
-                    className={`w-full justify-start p-3 h-auto text-left relative rounded-lg transition-all ${
-                      currentChatId === session.id 
-                        ? 'bg-background shadow-sm ring-1 ring-accent/20' 
-                        : 'hover:bg-accent/10 hover:shadow-sm'
+                    variant="ghost"
+                    className={`w-full justify-start p-0 h-auto text-left relative rounded-xl transition-all duration-200 group border border-transparent ${
+                      currentChatId === session.id
+                        ? "bg-white shadow-md border-border/20"
+                        : "hover:bg-white hover:shadow-sm"
                     }`}
                     onClick={() => onLoadChat(session.id)}
                   >
-                    {currentChatId === session.id && (
-                      <div className="absolute left-0 top-[10%] bottom-[10%] w-1 bg-primary rounded-full" />
-                    )}
-                    <div className="truncate pl-2">
-                      <div className="text-base font-medium truncate text-foreground/90">
-                        {session?.messages[0]?.query || "New conversation"}
-                      </div>
-                      <div className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
-                        {/* <span>{new Date(session.timestamp).toLocaleDateString(undefined, { 
-                          month: 'short', 
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}</span> */}
-                        {/* <span className="text-xs">•</span> */}
-                        <span>{session.messages.length} messages</span>
+                    <div className="w-full p-3 relative">
+                      <div
+                        className={`absolute left-0 top-2 bottom-2 w-1 rounded-full transition-colors duration-200 ${
+                          currentChatId === session.id
+                            ? "bg-blue-600"
+                            : "bg-transparent"
+                        }`}
+                      />
+                      <div className="truncate pl-3">
+                        <div
+                          className={`text-sm font-medium truncate transition-colors ${
+                            currentChatId === session.id
+                              ? "text-foreground"
+                              : "text-foreground/80 group-hover:text-foreground"
+                          }`}
+                        >
+                          {session?.messages[0]?.query || "New conversation"}
+                        </div>
+                        <div className="text-xs text-muted-foreground/70 mt-1 flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1">
+                            <div className="w-1 h-1 rounded-full bg-muted-foreground/40"></div>
+                            {session.messages.length} message
+                            {session.messages.length !== 1 ? "s" : ""}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </Button>

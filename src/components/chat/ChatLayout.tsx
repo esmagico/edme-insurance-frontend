@@ -22,6 +22,7 @@ export interface ResponseData {
 }
 
 export interface Message {
+  id?: string;
   query: string;
   response: string | ResponseData;
   attachedFile?: UploadedFile;
@@ -128,6 +129,7 @@ export const ChatLayout = () => {
     message?: Message
   ) => {
     const newMessage: Message = message || {
+      id: Date.now().toString(),
       query: text,
       response: `I received your message: "${text}"${
         fileName ? ` and file: ${fileName}` : ""
@@ -144,6 +146,30 @@ export const ChatLayout = () => {
             ? {
                 ...session,
                 messages: [...session.messages, newMessage],
+              }
+            : session
+        )
+      );
+    }
+  };
+
+  const handleUpdateMessage = (messageId: string, updatedResponse: string) => {
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId ? { ...msg, response: updatedResponse } : msg
+      )
+    );
+
+    // Update current chat session
+    if (sessionId) {
+      setChatSessions((prev) =>
+        prev.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                messages: session.messages.map((msg) =>
+                  msg.id === messageId ? { ...msg, response: updatedResponse } : msg
+                ),
               }
             : session
         )
@@ -228,6 +254,7 @@ export const ChatLayout = () => {
         <ChatInterface
           messages={messages}
           onSendMessage={handleSendMessage}
+          onUpdateMessage={handleUpdateMessage}
           isDark={isDark}
           setIsDark={setIsDark}
           sessionId={sessionId}
