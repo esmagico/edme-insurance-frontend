@@ -6,11 +6,19 @@ import {
   FiMicOff,
   FiLoader,
   FiFileText,
+  FiChevronDown,
+  FiChevronRight,
 } from "react-icons/fi";
 import { Message, ResponseData, Citation, UploadedFile } from "./ChatLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "./ThemeToggle";
 import axios from "axios";
@@ -601,7 +609,7 @@ export const ChatInterface = ({
 
                   {/* Assistant Response */}
                   <div className="flex justify-start">
-                    <div className="max-w-2xl lg:max-w-3xl px-4 py-3 rounded-lg animate-fade-in bg-message-assistant text-message-assistant-fg border border-border">
+                    <div className="w-full px-4 py-3 rounded-lg animate-fade-in bg-message-assistant text-message-assistant-fg border border-border">
                       {typeof message.response === "string" ? (
                         <div className="text-sm">
                           {message.response
@@ -665,43 +673,42 @@ export const ChatInterface = ({
                           {message.response.citations &&
                             message.response.citations.length > 0 && (
                               <div className="space-y-2 border-t pt-2">
-                                <div className="text-xs font-medium text-muted-foreground">
+                                <div className="text-xs font-medium text-muted-foreground mb-2">
                                   Sources ({message.response.citations.length}):
                                 </div>
-                                <div className="space-y-2">
+                                <Accordion type="multiple" className="w-full">
                                   {message.response.citations.map(
                                     (citation, citationIndex) => (
-                                      <div
+                                      <AccordionItem
                                         key={citationIndex}
-                                        className="bg-muted/50 rounded p-2 text-xs"
+                                        value={`citation-${citationIndex}`}
+                                        className="border border-muted/30 rounded-md mb-2 last:mb-0"
                                       >
-                                        <div className="flex items-center justify-between mb-1">
-                                          <div className="flex items-center gap-1">
-                                            <FiFileText className="h-3 w-3" />
-                                            <span className="font-medium text-foreground">
-                                              {citation.document_name}
+                                        <AccordionTrigger className="px-3 py-2 hover:no-underline hover:bg-muted/20 rounded-t-md text-xs">
+                                          <div className="flex items-center justify-between w-full mr-2">
+                                            <div className="flex items-center gap-2">
+                                              <FiFileText className="h-3 w-3 text-muted-foreground" />
+                                              <span className="font-medium text-foreground text-left">
+                                                {citation.document_name}
+                                              </span>
+                                            </div>
+                                            <span className="text-muted-foreground text-xs">
+                                              {Math.round(
+                                                citation.confidence.score * 100
+                                              )}
+                                              % confidence
                                             </span>
                                           </div>
-                                          <span className="text-muted-foreground">
-                                            {Math.round(
-                                              citation.confidence.score * 100
-                                            )}
-                                            % confidence
-                                          </span>
-                                        </div>
-                                        <div className="text-muted-foreground">
-                                          {citation.text_snippet}
-                                        </div>
-                                      </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent className="px-3 pb-3 pt-1">
+                                          <div className="text-xs text-muted-foreground leading-relaxed">
+                                            {citation.text_snippet}
+                                          </div>
+                                        </AccordionContent>
+                                      </AccordionItem>
                                     )
                                   )}
-                                  {/* {message.response.citations.length > 3 && (
-                                    <div className="text-xs text-muted-foreground">
-                                      +{message.response.citations.length - 3}{" "}
-                                      more sources
-                                    </div>
-                                  )} */}
-                                </div>
+                                </Accordion>
                               </div>
                             )}
                         </div>
@@ -723,7 +730,7 @@ export const ChatInterface = ({
 
                   {/* Skeleton Loader for Assistant Response */}
                   <div className="flex justify-start">
-                    <div className="max-w-2xl lg:max-w-3xl px-4 py-3 rounded-lg animate-fade-in bg-gray-50 text-gray-700 border border-gray-200">
+                    <div className="w-full px-4 py-3 rounded-lg animate-fade-in bg-gray-50 text-gray-700 border border-gray-200">
                       <div className="space-y-2">
                         <div
                           className="h-4 bg-gray-200 rounded animate-pulse"
