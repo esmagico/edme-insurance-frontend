@@ -287,7 +287,7 @@ export const RightSidebar = ({
 
                 {/* JSON Content with Syntax Highlighting */}
                 <pre
-                  className={`h-full text-sm font-mono p-4 overflow-auto leading-relaxed ${
+                  className={`h-full text-[12px] font-mono p-4 overflow-auto leading-relaxed ${
                     isDark ? "text-slate-300" : "text-slate-800"
                   }`}
                 >

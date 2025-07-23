@@ -78,9 +78,9 @@ export const LeftSidebar = ({
   return (
     <div
       ref={sidebarRef}
-      className={`relative border-r border-border/50 bg-background/95 backdrop-blur-sm flex flex-col transition-all duration-300 ease-in-out ${
+      className={`relative border-r border-border/50 bg-background/95 backdrop-blur-sm flex flex-col ${
         isOpen ? "" : "w-16"
-      }`}
+      } ${!isOpen ? "transition-all duration-300 ease-in-out" : ""}`}
       style={isOpen ? { width: `${width}px` } : undefined}
     >
       {/* Top Section with Toggle and New Chat */}
